@@ -5,7 +5,7 @@ import numpy._core.numeric as _nx
 
 EDA = [4]
 
-def custom_split(ary, number_of_entries:int):
+def custom_split(ary:list, number_of_entries:int):
         """
         Splits an array into multiple arrays. 
 
@@ -72,24 +72,31 @@ def segment_signal(record:str,channel:int, segment_length_s:int):
         stress_signal =[]
 
         #split the data using the custom splitting algorithm
-        non_stress_signal += custom_split( signal[RELAX_ONE_START : PHYS_START],entries_in_segment)
-        non_stress_signal += custom_split( signal[RELAX_TWO_START : COGN_START],entries_in_segment)
-        stress_signal     += custom_split( signal[COGN_START : RELAX_THREE_START], entries_in_segment)
-        non_stress_signal += custom_split( signal[RELAX_THREE_START : EMOT_START], entries_in_segment)
-        stress_signal     += custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment)
-        non_stress_signal += custom_split( signal[RELAX_FOUR_START : ], entries_in_segment)
+        non_stress_signal.extend(custom_split( signal[RELAX_ONE_START : PHYS_START],entries_in_segment))
+        non_stress_signal.extend(custom_split( signal[RELAX_TWO_START : COGN_START],entries_in_segment))
+        stress_signal.extend(custom_split( signal[COGN_START : RELAX_THREE_START], entries_in_segment))
+        non_stress_signal.extend(custom_split( signal[RELAX_THREE_START : EMOT_START], entries_in_segment))
+        stress_signal.extend(custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        non_stress_signal.extend(custom_split( signal[RELAX_FOUR_START : ], entries_in_segment))
 
         return stress_signal, non_stress_signal
         
+def group_all_data(directory:str, channel:list, data_count:int, segment_length:int):
+      global stress_segments
+      global non_stress_segments
+      stress_segments = []
+      non_stress_segments = []
+      
+      for i in range(data_count):
+            record_name = directory + "/Subject" + str(i + 1) +"_AccTempEDA"
+            temp_stress , temp_non_stress = segment_signal(record=record_name, channel=channel, segment_length_s=segment_length)
+            stress_segments.extend(temp_stress)
+            non_stress_segments.extend(temp_non_stress)
 
-
-
-subject_1_stress, subject_1_non_stress = segment_signal(record="data/Subject1_AccTempEDA",channel=EDA, segment_length_s=30)
-print(len(subject_1_stress))
-print(len(subject_1_non_stress))
-
-for i in range(25):
-      assert(len(subject_1_stress[i]) == 240)
-for i in range(40):
-      assert(len(subject_1_non_stress[i]) == 240)
+group_all_data(directory="data", channel=EDA, data_count=20, segment_length=30)
+a = len(stress_segments)
+b = len(non_stress_segments)
+print(a)
+print(b)
+print(a+b)
 
