@@ -5,7 +5,7 @@ import numpy._core.numeric as _nx
 
 EDA = [4]
 
-def custom_split(ary, number_of_segments:int, number_of_entries:int):
+def custom_split(ary, number_of_entries:int):
         """
         Splits an array into multiple arrays. 
 
@@ -14,7 +14,7 @@ def custom_split(ary, number_of_segments:int, number_of_entries:int):
         sub arrays with all except the last one having number_of_entries elements
         """
         Ntotal = len(ary)
-        Nsections = number_of_segments
+        Nsections = int(Ntotal/number_of_entries)
         if Nsections <=0:
                 raise ValueError('number selection must be larger then 0.') from None
         section_sizes = number_of_entries
@@ -44,15 +44,6 @@ def extract_annotation(record:str, extension:str):
       annotation = wfdb.rdann(record, extension)
       return annotation.sample
 
-def remove_signal_segments(segmented_signal,indices):
-      """
-      Remove the parts of the signal, where physical stress was expected
-      """
-      new_signal =[]
-      for i in indices:
-            new_signal += segmented_signal[i[0]:i[1]]
-      return new_signal
-
 def segment_signal(record:str,channel:int, segment_length_s:int):
         """
         Segment a WFDB record of a given channel into given lengths in seconds
@@ -60,32 +51,45 @@ def segment_signal(record:str,channel:int, segment_length_s:int):
         
         #read the signal and extract basic data and annotations
         signal,signal_data = wfdb.rdsamp(record_name=record, channels=channel,warn_empty=True)
-        extract_annotation(record=record,extension="atr")
+        annotation_points = extract_annotation(record=record,extension="atr")
         sampling_frequency = signal_data["fs"]
         signal_length = signal_data["sig_len"]
 
-        #calculate the number of segments and the length of each segment
+        #annotation constants for easier readability
+        RELAX_ONE_START = annotation_points[0]
+        PHYS_START = annotation_points[1]
+        RELAX_TWO_START = annotation_points[2]
+        COGN_START = annotation_points[3]
+        RELAX_THREE_START = annotation_points[5]
+        EMOT_START = annotation_points[6]
+        RELAX_FOUR_START = annotation_points[7]
+
+        #calculate the length of each segment
         entries_in_segment = int(sampling_frequency * segment_length_s)
-        number_of_segments = int(signal_length / entries_in_segment)
-        #if ((signal_length%entries_in_segment) !=0): number_of_segments+=1
+
+        #initialize the arrays for the segments
+        non_stress_signal =[]
+        stress_signal =[]
 
         #split the data using the custom splitting algorithm
-        segmented_signal = custom_split(signal,number_of_segments,entries_in_segment)
+        non_stress_signal += custom_split( signal[RELAX_ONE_START : PHYS_START],entries_in_segment)
+        non_stress_signal += custom_split( signal[RELAX_TWO_START : COGN_START],entries_in_segment)
+        stress_signal     += custom_split( signal[COGN_START : RELAX_THREE_START], entries_in_segment)
+        non_stress_signal += custom_split( signal[RELAX_THREE_START : EMOT_START], entries_in_segment)
+        stress_signal     += custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment)
+        non_stress_signal += custom_split( signal[RELAX_FOUR_START : ], entries_in_segment)
 
-        return segmented_signal
+        return stress_signal, non_stress_signal
         
 
 
 
-subject_1 = segment_signal(record="data/Subject1/Subject1_AccTempEDA",channel=EDA, segment_length_s=30)
-for i in range(75):
-      assert(subject_1[i].size == 240)
-subject_1_non_physical = remove_signal_segments(subject_1, [[0,10],[20,len(subject_1)]])
-print(len(subject_1_non_physical))
-assert(subject_1[0][0] == subject_1_non_physical[0][0])
+subject_1_stress, subject_1_non_stress = segment_signal(record="data/Subject1/Subject1_AccTempEDA",channel=EDA, segment_length_s=30)
+print(len(subject_1_stress))
+print(len(subject_1_non_stress))
 
-record = wfdb.rdrecord("data/Subject1/Subject1_AccTempEDA")
-annotation = wfdb.rdann("data/Subject1/Subject1_AccTempEDA",'atr')
-print(annotation.sample)
-#print(len(annotation.sample))
-#wfdb.plot_wfdb(record=record,annotation=annotation,plot_sym=True,time_units="minutes",title="test-Subject1")
+for i in range(25):
+      assert(len(subject_1_stress[i]) == 240)
+for i in range(40):
+      assert(len(subject_1_non_stress[i]) == 240)
+
