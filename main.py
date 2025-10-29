@@ -84,7 +84,7 @@ def segment_signal(record:str,channel:int, segment_length_s:int):
 
 
 
-subject_1_stress, subject_1_non_stress = segment_signal(record="data/Subject1/Subject1_AccTempEDA",channel=EDA, segment_length_s=30)
+subject_1_stress, subject_1_non_stress = segment_signal(record="data/Subject1_AccTempEDA",channel=EDA, segment_length_s=30)
 print(len(subject_1_stress))
 print(len(subject_1_non_stress))
 
