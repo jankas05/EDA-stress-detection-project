@@ -157,20 +157,56 @@ def group_all_data_by_subject(directory:str, channel:list, data_count:int, segme
         #go through the subject data and group it into stress and non stress by subject
         for i in range(data_count):
                temp_subject = group_one_data(directory, channel, i+1, segment_length)
-               subject_data.extend(temp_subject)
-                
+               subject_data.append(temp_subject)
+
+def get_subject_data(subject_number:int, stress:bool, segment_number=500):
+        """
+        A Function to facilitate getting subject data.
+
+        If the function encounters an IndexError, the whole stress/non stress 
+        category of the given subject. 
+        The subject_number is expected to be given from 1,...,n, e.g. to 
+        access the first subject you have to use 1 as the subject_number
+        (not 0, as you would normally as a programmer)
+
+        returns:
+        specific segment or subject data
+        """
+        if (stress): i=1
+        else: i=0
+        try:
+                return subject_data[subject_number - 1][i][segment_number]
+        except IndexError:
+                return subject_data[subject_number - 1][i]
+
+def test_cases():
+        #test for grouping data by segments
+        group_all_data_by_segments(directory="data", channel=EDA, data_count=20, segment_length=30)
+        a = len(stress_segments)
+        b = len(non_stress_segments)
+        print(a)
+        print(b)
+        print(a+b)
+
+        for i in range(a):
+                assert(len(stress_segments[i]) == 240)
+        for i in range(b):
+                assert(len(non_stress_segments[i]) == 240)
+        print("finished grouping by segments")
+
+        #test for grouping data by subject
+        group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30)
+        c = len(subject_data)
+        print(c)
+        assert(c==20)
+        for i in range(20):
+                for j in get_subject_data(i + 1,True):
+                        assert(len(j) == 240)
+                for k in get_subject_data(i + 1,False):
+                        assert(len(k) == 240)
+        print("finished grouping by subject")
+
+test_cases()
 
 
 
-group_all_data_by_segments(directory="data", channel=EDA, data_count=20, segment_length=30)
-a = len(stress_segments)
-b = len(non_stress_segments)
-print(a)
-print(b)
-print(a+b)
-
-for i in range(a):
-      assert(len(stress_segments[i]) == 240)
-for i in range(b):
-      assert(len(non_stress_segments[i]) == 240)
-print("finished")
