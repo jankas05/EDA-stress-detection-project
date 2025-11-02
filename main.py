@@ -10,9 +10,11 @@ def custom_split(ary:list, number_of_entries:int):
         Splits an array into multiple arrays. 
 
         Please refer to the ''split'' documentation in the numpy library. The only difference
-        between these functions is that this function splits an array into number_of_segments
-        sub arrays with all except the last one having number_of_entries elements
+        between these functions is that this function splits an array into sub arrays with
+        a given number of entries. If the last one array would be smaller than the given
+        number, it is excluded from the new array.
         """
+
         Ntotal = len(ary)
         Nsections = int(Ntotal/number_of_entries)
         if Nsections <=0:
@@ -41,10 +43,11 @@ def extract_annotation(record:str, extension:str):
       """
       Extract annotation data from an WFDB annotation file
       """
+
       annotation = wfdb.rdann(record, extension)
       return annotation.sample
 
-def segment_signal(record:str,channel:int, segment_length_s:int):
+def segment_signal(record:str,channel:list, segment_length_s:int):
         """
         Segment a WFDB record of a given channel into given lengths in seconds
         """
@@ -82,21 +85,38 @@ def segment_signal(record:str,channel:int, segment_length_s:int):
         return stress_signal, non_stress_signal
         
 def group_all_data(directory:str, channel:list, data_count:int, segment_length:int):
+      """
+      Groups all subject data into stress and non stress segments. 
+      """
+
+      #declare needed arrays
       global stress_segments
       global non_stress_segments
       stress_segments = []
       non_stress_segments = []
       
+      #go through the subject data and group it into the stress and non stress categories
       for i in range(data_count):
             record_name = directory + "/Subject" + str(i + 1) +"_AccTempEDA"
-            temp_stress , temp_non_stress = segment_signal(record=record_name, channel=channel, segment_length_s=segment_length)
+            temp_stress , temp_non_stress = segment_signal(record=record_name, 
+                                                           channel=channel, 
+                                                           segment_length_s=segment_length)
             stress_segments.extend(temp_stress)
             non_stress_segments.extend(temp_non_stress)
 
+
+
 group_all_data(directory="data", channel=EDA, data_count=20, segment_length=30)
+
+
 a = len(stress_segments)
 b = len(non_stress_segments)
 print(a)
 print(b)
 print(a+b)
 
+for i in range(a):
+      assert(len(stress_segments[i]) == 240)
+for i in range(b):
+      assert(len(non_stress_segments[i]) == 240)
+print("finished")
