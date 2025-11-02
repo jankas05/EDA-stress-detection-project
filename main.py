@@ -1,7 +1,8 @@
 import wfdb
 import numpy
 import numpy._core.numeric as _nx
-
+import cvxEDA
+import pylab as pl
 
 EDA = [4]
 
@@ -179,6 +180,30 @@ def get_subject_data(subject_number:int, stress:bool, segment_number=500):
         except IndexError:
                 return subject_data[subject_number - 1][i]
 
+def components_separation(segment:list, plot=False, fs=8):
+        segment_norm = (segment - segment.mean()) / segment.std()
+        [r, p, t, l, d, e, obj] = cvxEDA.cvxEDA(segment_norm, 1./fs)
+        if (plot):
+                tm = pl.arange(1., len(segment)+1.) / fs
+                pl.plot(tm, segment)
+                pl.plot(tm, segment_norm)
+                #pl.plot(tm, r)
+                #pl.plot(tm, p)
+                #pl.plot(tm, t)
+                pl.show()
+        return [r, p, t, l, d, e, obj]
+
+
+def form_feature_vector(segment:list):
+        meanscr_onsets = 0
+        meanscr_amp = 0
+        meanscr_recovery = 0
+
+        components = components_separation(segment)
+        meanscr_amp = components[0].mean()
+        
+        return [segment.mean(), segment.min(), segment.max(), segment.std(), meanscr_onsets, meanscr_amp, meanscr_recovery]
+
 def test_cases():
         #test for grouping data by segments
         group_all_data_by_segments(directory="data", channel=EDA, data_count=20, segment_length=30)
@@ -206,7 +231,7 @@ def test_cases():
                         assert(len(k) == 240)
         print("finished grouping by subject")
 
-test_cases()
-
-
+#test_cases()
+group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30)
+components_separation(get_subject_data(9,True,16),True)
 
