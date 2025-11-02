@@ -13,6 +13,9 @@ def custom_split(ary:list, number_of_entries:int):
         between these functions is that this function splits an array into sub arrays with
         a given number of entries. If the last one array would be smaller than the given
         number, it is excluded from the new array.
+
+        returns:
+        sub_arys - a numpy array with subarrays of the given length
         """
 
         Ntotal = len(ary)
@@ -40,18 +43,26 @@ def custom_split(ary:list, number_of_entries:int):
         return sub_arys
 
 def extract_annotation(record:str, extension:str):
-      """
-      Extract annotation data from an WFDB annotation file
-      """
+        """
+        Extract annotation data from an WFDB annotation file.
 
-      annotation = wfdb.rdann(record, extension)
-      return annotation.sample
+        returns:
+        annotation.sample - the annotation marks as written in the annotation file
+
+        """
+
+        annotation = wfdb.rdann(record, extension)
+        return annotation.sample
 
 def segment_signal(record:str,channel:list, segment_length_s:int):
         """
         Segment a WFDB record of a given channel into given lengths in seconds
+
+        returns:
+        stress_signal - a numpy array with the stress signal segments
+        non_stress_signal - a numpy array with the non stress signal segments
         """
-        
+
         #read the signal and extract basic data and annotations
         signal,signal_data = wfdb.rdsamp(record_name=record, channels=channel,warn_empty=True)
         annotation_points = extract_annotation(record=record,extension="atr")
@@ -82,35 +93,72 @@ def segment_signal(record:str,channel:list, segment_length_s:int):
         stress_signal.extend(custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment))
         non_stress_signal.extend(custom_split( signal[RELAX_FOUR_START : ], entries_in_segment))
 
-        return stress_signal, non_stress_signal
+        return non_stress_signal, stress_signal
 
 def group_one_data(directory:str, channel:list, subject_number:int, segment_length:int):
-      """
-      Groups one subjects data into stress and non stress categories
-      """
+        """
+        Groups one subjects data into stress and non stress categories.
+        Mostly a wrapper for the segment_signal function.
 
-      #figure out the name of the subject file and extract the data
-      record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
-      stress, non_stress = segment_signal(record=record_name, channel=channel, 
-                                          segment_length_s=segment_length)
-      return stress, non_stress
+        returns:
+        stress - a numpy array with segments(arrays) in the stress category
+        non_stress - a numpy array with segments(arrays) in the non stress category
+        """
+
+        #figure out the name of the subject file and extract the data
+        record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
+        stress, non_stress = segment_signal(record=record_name, channel=channel, 
+                                        segment_length_s=segment_length)
+        return non_stress, stress
 
 def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int):
-      """
-      Groups all subject data into stress and non stress segments. 
-      """
+        """
+        Groups all subject data into stress and non stress segments. 
+        The data is grouped into these two categories, therefore it cannot be traced
+        to a certain subject. 
+        Propably mostly for intern use, as group_all_data_by_subject function has in 
+        theory more functionality.
 
-      #declare needed arrays
-      global stress_segments
-      global non_stress_segments
-      stress_segments = []
-      non_stress_segments = []
-      
-      #go through the subject data and group it into the stress and non stress categories
-      for i in range(data_count):
-            temp_stress, temp_non_stress = group_one_data(directory, channel, i+1, segment_length)
-            stress_segments.extend(temp_stress)
-            non_stress_segments.extend(temp_non_stress)
+        Defines two global arrays stress_segments and non_stress_segments, through which 
+        data can be accessed. 
+
+        returns:
+        None
+        """
+
+        #declare needed arrays
+        global stress_segments
+        global non_stress_segments
+        stress_segments = []
+        non_stress_segments = []
+
+        #go through the subject data and group it into the stress and non stress categories
+        for i in range(data_count):
+                temp_stress, temp_non_stress = group_one_data(directory, channel, i+1, segment_length)
+                non_stress_segments.extend(temp_non_stress)
+                stress_segments.extend(temp_stress)
+
+def group_all_data_by_subject(directory:str, channel:list, data_count:int, segment_length:int):
+        """
+        Groups all data by subject into stress and non stress segments
+
+        Defines a global array subject_data, through which the subject data can be accessed 
+        by subject_data[subject_number][stress], in which stress is 1 and non stress 0.
+
+        returns:
+        None
+        """
+
+        #declare needed arrays
+        global subject_data
+        subject_data = []
+        temp_subject = []
+
+        #go through the subject data and group it into stress and non stress by subject
+        for i in range(data_count):
+               temp_subject = group_one_data(directory, channel, i+1, segment_length)
+               subject_data.extend(temp_subject)
+                
 
 
 
