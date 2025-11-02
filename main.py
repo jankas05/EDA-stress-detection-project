@@ -83,8 +83,19 @@ def segment_signal(record:str,channel:list, segment_length_s:int):
         non_stress_signal.extend(custom_split( signal[RELAX_FOUR_START : ], entries_in_segment))
 
         return stress_signal, non_stress_signal
-        
-def group_all_data(directory:str, channel:list, data_count:int, segment_length:int):
+
+def group_one_data(directory:str, channel:list, subject_number:int, segment_length:int):
+      """
+      Groups one subjects data into stress and non stress categories
+      """
+
+      #figure out the name of the subject file and extract the data
+      record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
+      stress, non_stress = segment_signal(record=record_name, channel=channel, 
+                                          segment_length_s=segment_length)
+      return stress, non_stress
+
+def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int):
       """
       Groups all subject data into stress and non stress segments. 
       """
@@ -97,18 +108,13 @@ def group_all_data(directory:str, channel:list, data_count:int, segment_length:i
       
       #go through the subject data and group it into the stress and non stress categories
       for i in range(data_count):
-            record_name = directory + "/Subject" + str(i + 1) +"_AccTempEDA"
-            temp_stress , temp_non_stress = segment_signal(record=record_name, 
-                                                           channel=channel, 
-                                                           segment_length_s=segment_length)
+            temp_stress, temp_non_stress = group_one_data(directory, channel, i+1, segment_length)
             stress_segments.extend(temp_stress)
             non_stress_segments.extend(temp_non_stress)
 
 
 
-group_all_data(directory="data", channel=EDA, data_count=20, segment_length=30)
-
-
+group_all_data_by_segments(directory="data", channel=EDA, data_count=20, segment_length=30)
 a = len(stress_segments)
 b = len(non_stress_segments)
 print(a)
