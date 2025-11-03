@@ -3,6 +3,9 @@ import numpy
 import numpy._core.numeric as _nx
 import cvxEDA
 import pylab as pl
+import scipy as sp
+from scipy.signal import find_peaks
+from scipy.stats import zscore
 
 EDA = [4]
 
@@ -49,15 +52,31 @@ def extract_annotation(record:str, extension:str):
 
         returns:
         annotation.sample - the annotation marks as written in the annotation file
-
         """
 
         annotation = wfdb.rdann(record, extension)
         return annotation.sample
 
+def components_separation(segment:list, fs=8):
+        """
+        Separates an EDA signal into its SCL(tonic) and SCR(phasic) components
+        as shown in the cvxEDA paper.
+
+        returns: 
+        list of returns from the cvxEDA function
+        """
+
+        #normalize and separate the components
+        segment_norm = zscore(segment)
+        [r, p, t, l, d, e, obj] = cvxEDA.cvxEDA(segment_norm, 1./fs)
+
+        return [r, p, t, l, d, e, obj]
+
 def segment_signal(record:str,channel:list, segment_length_s:int):
         """
-        Segment a WFDB record of a given channel into given lengths in seconds
+        Segment a WFDB record of a given channel into given lengths in seconds.
+        This function also separates the signal in the SCL,SCR components
+        as seen in the cvxEDA module.
 
         returns:
         stress_signal - a numpy array with the stress signal segments
@@ -81,10 +100,17 @@ def segment_signal(record:str,channel:list, segment_length_s:int):
 
         #calculate the length of each segment
         entries_in_segment = int(sampling_frequency * segment_length_s)
+        components = components_separation(signal)
+
 
         #initialize the arrays for the segments
         non_stress_signal =[]
         stress_signal =[]
+        phasic_stress =[]
+        phasic_non_stress =[]
+        tonic_stress = []
+        tonic_non_stress =[]
+
 
         #split the data using the custom splitting algorithm
         non_stress_signal.extend(custom_split( signal[RELAX_ONE_START : PHYS_START],entries_in_segment))
@@ -94,7 +120,21 @@ def segment_signal(record:str,channel:list, segment_length_s:int):
         stress_signal.extend(custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment))
         non_stress_signal.extend(custom_split( signal[RELAX_FOUR_START : ], entries_in_segment))
 
-        return non_stress_signal, stress_signal
+        phasic_non_stress.extend(custom_split( components[0][RELAX_ONE_START : PHYS_START],entries_in_segment))
+        phasic_non_stress.extend(custom_split( components[0][RELAX_TWO_START : COGN_START],entries_in_segment))
+        phasic_stress.extend(custom_split( components[0][COGN_START : RELAX_THREE_START], entries_in_segment))
+        phasic_non_stress.extend(custom_split( components[0][RELAX_THREE_START : EMOT_START], entries_in_segment))
+        phasic_stress.extend(custom_split( components[0][EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        phasic_non_stress.extend(custom_split( components[0][RELAX_FOUR_START : ], entries_in_segment))
+
+        tonic_non_stress.extend(custom_split( components[2][RELAX_ONE_START : PHYS_START],entries_in_segment))
+        tonic_non_stress.extend(custom_split( components[2][RELAX_TWO_START : COGN_START],entries_in_segment))
+        tonic_stress.extend(custom_split( components[2][COGN_START : RELAX_THREE_START], entries_in_segment))
+        tonic_non_stress.extend(custom_split( components[2][RELAX_THREE_START : EMOT_START], entries_in_segment))
+        tonic_stress.extend(custom_split( components[2][EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        tonic_non_stress.extend(custom_split( components[2][RELAX_FOUR_START : ], entries_in_segment))       
+
+        return non_stress_signal, stress_signal, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
 
 def group_one_data(directory:str, channel:list, subject_number:int, segment_length:int):
         """
@@ -108,9 +148,9 @@ def group_one_data(directory:str, channel:list, subject_number:int, segment_leng
 
         #figure out the name of the subject file and extract the data
         record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
-        stress, non_stress = segment_signal(record=record_name, channel=channel, 
+        non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress = segment_signal(record=record_name, channel=channel, 
                                         segment_length_s=segment_length)
-        return non_stress, stress
+        return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
 
 def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int):
         """
@@ -135,7 +175,7 @@ def group_all_data_by_segments(directory:str, channel:list, data_count:int, segm
 
         #go through the subject data and group it into the stress and non stress categories
         for i in range(data_count):
-                temp_stress, temp_non_stress = group_one_data(directory, channel, i+1, segment_length)
+                temp_stress, temp_non_stress, _ ,_ = group_one_data(directory, channel, i+1, segment_length)
                 non_stress_segments.extend(temp_non_stress)
                 stress_segments.extend(temp_stress)
 
@@ -160,7 +200,7 @@ def group_all_data_by_subject(directory:str, channel:list, data_count:int, segme
                temp_subject = group_one_data(directory, channel, i+1, segment_length)
                subject_data.append(temp_subject)
 
-def get_subject_data(subject_number:int, stress:bool, segment_number=500):
+def get_subject_data(subject_number:int,type:int, segment_number=500):
         """
         A Function to facilitate getting subject data.
 
@@ -170,39 +210,92 @@ def get_subject_data(subject_number:int, stress:bool, segment_number=500):
         access the first subject you have to use 1 as the subject_number
         (not 0, as you would normally as a programmer)
 
+        type=0: non stress segment
+        type=1: stress segment
+        type=2: phasic non stress segment
+        type=3: phasic stress segment
+        type=4: tonic non stress segment
+        type=5: tonic stress segment
+
+
         returns:
         specific segment or subject data
         """
-        if (stress): i=1
-        else: i=0
+
         try:
-                return subject_data[subject_number - 1][i][segment_number]
+                return subject_data[subject_number - 1][type][segment_number]
         except IndexError:
-                return subject_data[subject_number - 1][i]
+                return subject_data[subject_number - 1][type]
 
-def components_separation(segment:list, plot=False, fs=8):
-        segment_norm = (segment - segment.mean()) / segment.std()
-        [r, p, t, l, d, e, obj] = cvxEDA.cvxEDA(segment_norm, 1./fs)
-        if (plot):
-                tm = pl.arange(1., len(segment)+1.) / fs
-                pl.plot(tm, segment)
-                pl.plot(tm, segment_norm)
-                #pl.plot(tm, r)
-                #pl.plot(tm, p)
-                #pl.plot(tm, t)
+
+def scr_peaks(phasic_segment:list, plot=False):
+        """
+        Finds all local extrema( peaks and throughs) within an array.
+        This function can also plot the given segment with the found extrema.
+
+        returns:
+        peaks - list of indices of found peaks
+        troughs - list of indices of found troughs
+        """
+
+        #find peaks and troughs
+        peaks, _ = find_peaks(phasic_segment)
+        troughs, _ =find_peaks(-phasic_segment)
+
+        #plot if needed
+        if(plot):
+                tm = pl.arange(1., len(phasic_segment)+1.)/8
+                pl.plot(tm,phasic_segment)
+                pl.plot(tm[peaks],phasic_segment[peaks],"x")
+                pl.plot(tm[troughs],phasic_segment[troughs],"o")
                 pl.show()
-        return [r, p, t, l, d, e, obj]
 
+        return peaks, troughs
 
-def form_feature_vector(segment:list):
-        meanscr_onsets = 0
-        meanscr_amp = 0
-        meanscr_recovery = 0
+def calculate_scr_features(phasic_segment:list):
+        """
+        Calculate additional SCR features to form the feature vector.
+        For definitions of these features see:
+        STRESS DETECTION THROUGH WRIST-BASED ELECTRODERMAL ACTIVITY MONITORING AND MACHINE LEARNING
 
-        components = components_separation(segment)
-        meanscr_amp = components[0].mean()
+        returns:
+        scr_amplitudes - list of all measured amplitudes in the segment
+        scr_onsets - list of all measured onsets in the segment
+        scr_recoveries - list of all measured recovery times in s
+        """
+        #not finished
+        peaks, throughs = scr_peaks(phasic_segment,True)
+        scr_amplitudes = []
+        scr_onsets = []
+        scr_recoveries = []
         
-        return [segment.mean(), segment.min(), segment.max(), segment.std(), meanscr_onsets, meanscr_amp, meanscr_recovery]
+        return scr_amplitudes, scr_onsets, scr_recoveries
+                
+
+
+def form_feature_vector(segment:list, phasic_segment:list):
+        """
+        Forms the Feature vector as seen in the paper
+        STRESS DETECTION THROUGH WRIST-BASED ELECTRODERMAL ACTIVITY MONITORING AND MACHINE LEARNING
+
+        returns:
+        feature vector as seen in the paper above
+        """
+        scr_amplitudes, scr_onsets,scr_recoveries = calculate_scr_features(phasic_segment)
+        
+        return [segment.mean(), segment.min(), segment.max(), segment.std(), scr_amplitudes.mean(), scr_onsets.mean(), scr_recoveries.mean()]
+
+def plot_segment(segment:list, phasic_segment:list, tonic_segment:list):
+        """
+        Plots a given segment with the phasic components.
+        """
+        tm = pl.arange(1., len(segment)+1.) / 8
+        pl.plot(tm, segment, color='b') #blue
+        pl.plot(tm, phasic_segment, color='r') #red
+        pl.plot(tm, tonic_segment, color='k') #black
+        pl.show()
+
+        return True
 
 def test_cases():
         #test for grouping data by segments
@@ -233,5 +326,5 @@ def test_cases():
 
 #test_cases()
 group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30)
-components_separation(get_subject_data(9,True,16),True)
-
+plot_segment(get_subject_data(1,1,2),get_subject_data(1,3,2),get_subject_data(1,5,2))
+form_feature_vector(get_subject_data(1,1,2),get_subject_data(1,3,2))
