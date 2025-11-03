@@ -8,6 +8,7 @@ from scipy.signal import find_peaks
 from scipy.stats import zscore
 
 EDA = [4]
+FS = 8
 
 def custom_split(ary:list, number_of_entries:int):
         """
@@ -264,12 +265,58 @@ def calculate_scr_features(phasic_segment:list):
         scr_recoveries - list of all measured recovery times in s
         """
         #not finished
-        peaks, throughs = scr_peaks(phasic_segment,True)
+        peaks, troughs = scr_peaks(phasic_segment,True)
         scr_amplitudes = []
         scr_onsets = []
         scr_recoveries = []
+        current_recovery  = 0 
+
+        #go through all troughs
+        for i in range(len(troughs)):                
+                if(current_recovery > troughs[i]):
+                        continue
+                #go through all peaks
+                for j in range(len(peaks)):
+
+                        #ensure non are calculated if there are none
+                        current_recovery = 0
+                        current_amplitude = 0
+                        current_peak = 0
+                        current_onset = 0
+                        recovery = 0
+                        recovery_found = False
+
+                        if (peaks[j] <= troughs[i]): #peak happened before a trough
+                                continue #check others
+
+                        else: 
+                                current_peak = j
+                                current_amplitude = phasic_segment[peaks[j]] - phasic_segment[troughs[i]]
+                                #search for half recovery
+                                for k in range(j,len(phasic_segment)):
+                                        try:
+                                                if (phasic_segment[k] > phasic_segment[current_peak]):
+                                                        current_peak = k
+                                                if (phasic_segment[k-1] >= current_amplitude >= phasic_segment[k+1]):
+                                                        recovery_found = True
+                                                        current_recovery = k #full recovery happened
+                                                else: 
+                                                        continue
+                                        except IndexError:
+                                                break
+                                
+                                #calculate all the extracted features
+                                if (recovery_found):
+                                        current_amplitude = phasic_segment[current_peak] - phasic_segment[troughs[i]]
+                                        scr_amplitudes.append(current_amplitude)
+
+                                        current_onset = phasic_segment[troughs[i]]
+                                        scr_onsets.append(current_onset)
+
+                                        recovery= (current_recovery - current_peak)/FS
+                                        scr_recoveries.append(recovery)
         
-        return scr_amplitudes, scr_onsets, scr_recoveries
+        return scr_onsets, scr_amplitudes, scr_recoveries
                 
 
 
@@ -281,9 +328,10 @@ def form_feature_vector(segment:list, phasic_segment:list):
         returns:
         feature vector as seen in the paper above
         """
-        scr_amplitudes, scr_onsets,scr_recoveries = calculate_scr_features(phasic_segment)
-        
-        return [segment.mean(), segment.min(), segment.max(), segment.std(), scr_amplitudes.mean(), scr_onsets.mean(), scr_recoveries.mean()]
+        scr_onsets, scr_amplitudes, scr_recoveries = calculate_scr_features(phasic_segment)
+        tm = pl.arange(1., len(phasic_segment)+1.)/FS
+
+        return [segment.mean(), segment.min(), segment.max(), segment.std(), numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), numpy.mean(scr_recoveries)]
 
 def plot_segment(segment:list, phasic_segment:list, tonic_segment:list):
         """
@@ -327,4 +375,5 @@ def test_cases():
 #test_cases()
 group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30)
 plot_segment(get_subject_data(1,1,2),get_subject_data(1,3,2),get_subject_data(1,5,2))
-form_feature_vector(get_subject_data(1,1,2),get_subject_data(1,3,2))
+c = form_feature_vector(get_subject_data(1,1,2),get_subject_data(1,3,2))
+print(c)
