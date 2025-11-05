@@ -275,31 +275,28 @@ def calculate_scr_features(phasic_segment:list):
         for i in range(len(troughs)):                
                 if(current_recovery > troughs[i]):
                         continue
+
                 #go through all peaks
+                current_recovery = 0
                 for j in range(len(peaks)):
 
                         #ensure non are calculated if there are none
-                        current_recovery = 0
-                        current_amplitude = 0
-                        current_peak = 0
-                        current_onset = 0
-                        recovery = 0
-                        recovery_found = False
 
                         if (peaks[j] <= troughs[i]): #peak happened before a trough
                                 continue #check others
 
                         else: 
-                                current_peak = j
-                                current_amplitude = phasic_segment[peaks[j]] - phasic_segment[troughs[i]]
+                                current_peak = peaks[j]
+                                current_amplitude = phasic_segment[current_peak] - phasic_segment[troughs[i]]
                                 #search for half recovery
-                                for k in range(j,len(phasic_segment)):
+                                for k in range(current_peak,len(phasic_segment)):
                                         try:
                                                 if (phasic_segment[k] > phasic_segment[current_peak]):
                                                         current_peak = k
-                                                if ((phasic_segment[k-1] >= current_amplitude) and (current_amplitude >= phasic_segment[k+1])):
+                                                if ((phasic_segment[k-1] >= current_amplitude) and (current_amplitude > phasic_segment[k+1])): #here lies the error
                                                         recovery_found = True
                                                         current_recovery = k #full recovery happened
+                                                        break
                                                 else: 
                                                         continue
                                         except IndexError:
@@ -315,6 +312,13 @@ def calculate_scr_features(phasic_segment:list):
 
                                         recovery= (current_recovery - current_peak)/FS
                                         scr_recoveries.append(recovery)
+
+                                        current_amplitude = 0
+                                        current_peak = 0
+                                        current_onset = 0
+                                        recovery = 0
+                                        recovery_found = False
+                                        break
         
         return scr_onsets, scr_amplitudes, scr_recoveries
                 
