@@ -297,7 +297,7 @@ def calculate_scr_features(phasic_segment:list):
                                         try:
                                                 if (phasic_segment[k] > phasic_segment[current_peak]):
                                                         current_peak = k
-                                                if (phasic_segment[k-1] >= current_amplitude >= phasic_segment[k+1]):
+                                                if ((phasic_segment[k-1] >= current_amplitude) and (current_amplitude >= phasic_segment[k+1])):
                                                         recovery_found = True
                                                         current_recovery = k #full recovery happened
                                                 else: 
@@ -329,9 +329,8 @@ def form_feature_vector(segment:list, phasic_segment:list):
         feature vector as seen in the paper above
         """
         scr_onsets, scr_amplitudes, scr_recoveries = calculate_scr_features(phasic_segment)
-        tm = pl.arange(1., len(phasic_segment)+1.)/FS
-
-        return [segment.mean(), segment.min(), segment.max(), segment.std(), numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), numpy.mean(scr_recoveries)]
+        
+        return [segment.mean(), numpy.min(segment), numpy.max(segment), segment.std(), numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), numpy.mean(scr_recoveries)]
 
 def plot_segment(segment:list, phasic_segment:list, tonic_segment:list):
         """
@@ -373,7 +372,7 @@ def test_cases():
         print("finished grouping by subject")
 
 #test_cases()
-group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30)
+group_all_data_by_subject(directory="data", channel=EDA, data_count=1, segment_length=30)
 plot_segment(get_subject_data(1,1,2),get_subject_data(1,3,2),get_subject_data(1,5,2))
 c = form_feature_vector(get_subject_data(1,1,2),get_subject_data(1,3,2))
 print(c)
