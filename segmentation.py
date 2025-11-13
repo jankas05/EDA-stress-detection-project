@@ -6,6 +6,7 @@ import pylab as pl
 import scipy as sp
 from scipy.signal import find_peaks
 from scipy.stats import zscore
+import csv
 
 EDA = [4]
 FS = 8
@@ -224,10 +225,9 @@ def get_subject_data(subject_number:int,type:int, segment_number=500):
         """
 
         try:
-                return subject_data[subject_number - 1][type][segment_number]
+                return subject_data[subject_number - 1][type][segment_number-1]
         except IndexError:
                 return subject_data[subject_number - 1][type]
-
 
 def scr_peaks(phasic_segment:list, plot=False):
         """
@@ -265,11 +265,12 @@ def calculate_scr_features(phasic_segment:list):
         scr_recoveries - list of all measured recovery times in s
         """
         #not finished
-        peaks, troughs = scr_peaks(phasic_segment,True)
+        peaks, troughs = scr_peaks(phasic_segment)
         scr_amplitudes = []
         scr_onsets = []
         scr_recoveries = []
         current_recovery  = 0 
+        recovery_found = False
 
         #go through all troughs
         for i in range(len(troughs)):                
@@ -322,8 +323,6 @@ def calculate_scr_features(phasic_segment:list):
         
         return scr_onsets, scr_amplitudes, scr_recoveries
                 
-
-
 def form_feature_vector(segment:list, phasic_segment:list):
         """
         Forms the Feature vector as seen in the paper
@@ -336,6 +335,32 @@ def form_feature_vector(segment:list, phasic_segment:list):
         
         return [segment.mean(), numpy.min(segment), numpy.max(segment), segment.std(), numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), numpy.mean(scr_recoveries)]
 
+def form_database(directory, channel, data_count, segment_length):
+        group_all_data_by_subject(directory, channel, data_count, segment_length)
+        global database
+        database = []
+        for i in range(len(subject_data)):
+                for k in range(2):
+                        for l in range(len(subject_data[i][k])):
+                                V = form_feature_vector(get_subject_data(i + 1, k,l + 1), 
+                                    get_subject_data(i + 1, k+2, l + 1)) 
+                                subject = {'subject': i + 1, 'seg_mean': V[0], 
+                                   'seg_min': V[1], 'seg_max': V[2], 'seg_std': V[3],
+                                   'rc_onsets': V[4], 'rc_amp': V[5], 'rc_rec': V[6]}
+                                database.append(subject)  
+        return True
+                             
+def export_database(file_name):
+        with open(file_name, 'w', newline='') as csvfile:
+                fieldnames = [ 'subject', 'seg_mean', 'seg_min', 'seg_max', 
+                              'seg_std', 'rc_onsets', 'rc_amp', 'rc_rec']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(database)
+        return True
+
+
+                
 def plot_segment(segment:list, phasic_segment:list, tonic_segment:list):
         """
         Plots a given segment with the phasic components.
@@ -376,7 +401,5 @@ def test_cases():
         print("finished grouping by subject")
 
 #test_cases()
-group_all_data_by_subject(directory="data", channel=EDA, data_count=1, segment_length=30)
-plot_segment(get_subject_data(1,1,2),get_subject_data(1,3,2),get_subject_data(1,5,2))
-c = form_feature_vector(get_subject_data(1,1,2),get_subject_data(1,3,2))
-print(c)
+form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
+export_database("segments.csv")
