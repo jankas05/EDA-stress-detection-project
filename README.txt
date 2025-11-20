@@ -4,13 +4,22 @@ in IEEE Journal of Biomedical and Health Informatics, vol. 27, no. 5, pp. 2155-2
 
 Currently following functionalities are implemented:
 -segmentation of the signal
-
-Planned functionalities:
 -Component Separation
 -Feature Extraction
--Data Splitting
--Classification using SVM
+-Database (not fully supported)
+-CSV export of data
+
+Planned functionalities:
+-Data splitting
+-Classification using machine learning techniques
 -Accuracy review
+
+Optional functionalities:
+-Comparison Neurokit vs cvxEDA component separation
+-low pass filter vs no filter comparison
+-more datasets
+-multimodal approach( EEG, PPA,...)
+
 
 Because of the data and programs used in this project, I am obliged to list the following references:
 - L. Zhu et al., "Stress Detection Through Wrist-Based Electrodermal Activity Monitoring and Machine Learning," 
