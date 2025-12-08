@@ -4,6 +4,8 @@ import ydata_profiling
 from yellowbrick.features import Rank2D
 import matplotlib.pyplot as plt
 import sklearn.model_selection
+import numpy as np
+from math import ceil
 
 def get_database():
     """
@@ -50,26 +52,51 @@ def prepare_data(df, random_state):
     random_state - number to reproduce or randomize splitting
 
     returns:\n
-    y_test - panda dataframe with the classification feature for testing\n
+    X_train - panda dataframe of all other relevant features for training \n
     y_train - panda dataframe with the classification feature for training\n
+    X_valid - panda dataframe for validation \n
+    y_valid - panda dataframe for validation \n
     X_test - panda dataframe of all other relevant features for testing \n
-    X_train - panda dataframe of all other relevant features for training 
+    y_test - panda dataframe with the classification feature for testing
     """
 
+    #basic preprocessing
     df1 = df.dropna()
     y = df1.stress
     X = df1.drop(columns = ["stress"])
-    groups = df1.subject
 
-    gss = sklearn.model_selection.GroupShuffleSplit(n_splits=1, train_size=17/20 , random_state=random_state)
+    #first splitting into training and test
+    groups = df1.subject
+    train_size = (len(df.subject.unique()) - ceil(0.1 * len(df.subject.unique()))) / len(df.subject.unique())
+    print(train_size)
+    gss = sklearn.model_selection.GroupShuffleSplit(n_splits=1, train_size=train_size , random_state=random_state)
     train_idx, test_idx = next(gss.split(X,y, groups=groups))
 
-    X_train = X.iloc[train_idx]
+    X_other = X.iloc[train_idx]
     X_test = X.iloc[test_idx]
-    y_train = y.iloc[train_idx]
+    y_other = y.iloc[train_idx]
     y_test = y.iloc[test_idx]
 
-    return y_test, y_train, X_test, X_train
+    X_test.drop(columns="subject")
+    y_test.drop(columns="subject")
+
+    #split further into validation and training data
+    training_subjects = X_other.subject.unique()
+    rng = np.random.default_rng(seed=random_state)
+    rng.shuffle(training_subjects)
+
+    val_subjects = training_subjects[:1]
+    other_subjects = training_subjects[1:]
+
+    val_mask = X_other.subject.isin(val_subjects)
+    train_mask = X_other.subject.isin(other_subjects)
+
+    X_valid = X_other[val_mask].drop(columns="subject")
+    X_train = X_other[train_mask].drop(columns="subject")
+    y_valid = y_other[val_mask].drop(columns="subject")
+    y_train = y_other[train_mask].drop(columns="subject")
+
+    return X_train, y_train, X_valid, y_valid, X_test, y_test
 
 def plot_correlation(X,y,name):
     """
@@ -91,5 +118,5 @@ def plot_correlation(X,y,name):
     fig.savefig(name,dpi=300, bbox_inches="tight")
 
 df = pd.read_csv("segments.csv")
-y_test, y_train, X_test, X_train = prepare_data(df,42)
-
+X_train, y_train, X_valid, y_valid, X_test, y_test = prepare_data(df,42)
+create_profile(X_test)
