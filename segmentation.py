@@ -337,15 +337,14 @@ def form_feature_vector(segment:list, phasic_segment:list):
 
 def form_database(directory, channel, data_count, segment_length):
         """
-        Forms a global dictionary called database with feature vectors and some information about them. 
+        Forms a dictionary called database with feature vectors and some information about them. 
         database = {subject, seg_mean, seg_min, seg_max, seg_std, rc_onsets, rc_amp, rc_rec, stress}
 
-        returns: True
+        returns: database
         """
         #segment the data, group it and store it into an global array
         group_all_data_by_subject(directory, channel, data_count, segment_length)
 
-        global database
         database = []
         #form the database
         for i in range(len(subject_data)):
@@ -359,7 +358,7 @@ def form_database(directory, channel, data_count, segment_length):
                                    'seg_min': V[1], 'seg_max': V[2], 'seg_std': V[3],
                                    'rc_onsets': V[4], 'rc_amp': V[5], 'rc_rec': V[6], 'stress': k}
                                 database.append(subject)  
-        return True
+        return database
                              
 def export_database(file_name,dictionary):
         """
@@ -416,5 +415,8 @@ def test_cases():
         print("finished grouping by subject")
 
 #test_cases()
-form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
-export_database("segments.csv", database)
+#form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
+#export_database("segments.csv", database)
+
+#tested what a NaN segment looked like
+#plot_segment(get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4))
