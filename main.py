@@ -77,8 +77,8 @@ def prepare_data(df, random_state):
     y_other = y.iloc[train_idx]
     y_test = y.iloc[test_idx]
 
-    X_test.drop(columns="subject")
-    y_test.drop(columns="subject")
+    X_test = X_test.drop(columns="subject")
+    y_test = y_test.drop(columns="subject")
 
     #split further into validation and training data
     training_subjects = X_other.subject.unique()
