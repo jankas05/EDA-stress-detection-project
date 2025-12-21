@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 import sklearn.model_selection as ms
 import numpy as np
 from math import ceil
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 def get_database():
     """
@@ -85,6 +90,60 @@ def prepare_data(df, random_state):
     y_train = y_train.drop(columns="subject")
 
     return X_train, y_train, X_test, y_test, groups
+
+def train_model(X_train, y_train, groups, model_select, random_state ):
+    """
+    Train a model on a training set and validate it. The specifing model can be 
+    set using the model_select variable. Cross-validation will be based upon the 
+    LeaveOneGroupOut(LOGO) methoddue to the data not being i.i.d.
+    Returns a trained model.
+    
+    :param X_train: Panda dataframe training set with features
+    :param y_train: Panda dataframe training set with estimator feature
+    :param groups: Array for the cross-validation
+    :param model_select: The machine learning algorithm upon which the data will be trained. Has to be 
+    either "knn", "svm", "nb", "lr" or "rf"
+    :param random_state: int to add reproducability to the results
+    """
+    unique_subjects = len(groups.unique())
+    train_size = (unique_subjects - 1) / unique_subjects 
+    gss = ms.GroupShuffleSplit(n_splits=unique_subjects, train_size=train_size, random_state=random_state)
+    match model_select:
+        case "knn": #K Nearest Neighbors
+            knc = KNeighborsClassifier(algorithm="auto", leaf_size=30, metric="minkowski", 
+                                       n_neighbors=5, p=2, weights="uniform")
+            knc.fit(X_train, y_train)
+            scores = ms.cross_val_score(knc, X_train, y_train, cv=gss)
+        case "svm": #Support Vector Machines
+            svc = SVC(C=1.0, cache_size=1024, class_weight=None, coef0=0.0, 
+                      decision_function_shape='ovr', degree=3, gamma='auto', kernel='rbf', 
+                      max_iter=-1, probability=True, random_state=random_state, 
+                      shrinking=True, tol=0.001, verbose=False )
+            svc.fit(X_train, y_train)
+            scores = ms.cross_val_score(svc, X_train, y_train, cv=gss)
+        case "nb": #Naive Bayes
+            nb = GaussianNB(priors=None, var_smoothing=1e-09)
+            nb.fit(X_train, y_train)
+            scores = ms.cross_val_score(nb, X_train, y_train, cv=gss)
+        case "lr": #Logistic Regression
+            lr = LogisticRegression(C=1.0, class_weight=None,dual=False, fit_intercept=True, 
+                                    intercept_scaling=1, max_iter=100,multi_class='ovr', n_jobs=1, 
+                                    penalty='l2',random_state=random_state, solver='liblinear',tol=0.0001, 
+                                    verbose=0, warm_start=False)
+            lr.fit(X_train, y_train)
+            scores = ms.cross_val_score(lr, X_train, y_train, cv=gss)
+
+        case "rf": #RandomForest
+            rf = RandomForestClassifier(bootstrap=True, class_weight=None, criterion='gini', max_depth=None, 
+                                        max_features='auto', max_leaf_nodes=None, min_impurity_decrease=0.0, 
+                                        min_impurity_split=None, min_samples_leaf=1, min_samples_split=2, 
+                                        min_weight_fraction_leaf=0.0, n_estimators=10, n_jobs=1, oob_score=False, 
+                                        random_state=42, verbose=0, warm_start=False)
+            rf.fit(X_train, y_train)
+            scores = ms.cross_val_score(rf, X_train, y_train, cv=gss)
+        case _: #wrong model selected
+            return False 
+
 
 def plot_correlation(X,y,name):
     """
