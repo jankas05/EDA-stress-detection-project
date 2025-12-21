@@ -3,7 +3,7 @@ import pandas as pd
 import ydata_profiling
 from yellowbrick.features import Rank2D
 import matplotlib.pyplot as plt
-import sklearn.model_selection
+import sklearn.model_selection as ms
 import numpy as np
 from math import ceil
 
@@ -54,10 +54,9 @@ def prepare_data(df, random_state):
     returns:\n
     X_train - panda dataframe of all other relevant features for training \n
     y_train - panda dataframe with the classification feature for training\n
-    X_valid - panda dataframe for validation \n
-    y_valid - panda dataframe for validation \n
-    X_test - panda dataframe of all other relevant features for testing \n
-    y_test - panda dataframe with the classification feature for testing
+    X_test  - panda dataframe of all other relevant features for testing \n
+    y_test  - panda dataframe with the classification feature for testing \n
+    groups  - array with the group indices for cross-validation
     """
 
     #basic preprocessing
@@ -65,38 +64,27 @@ def prepare_data(df, random_state):
     y = df1.stress
     X = df1.drop(columns = ["stress"])
 
-    #first splitting into training and test
+    #split the dataset into training and testing sets
     groups = df1.subject
     train_size = (len(df.subject.unique()) - ceil(0.1 * len(df.subject.unique()))) / len(df.subject.unique())
     print(train_size)
-    gss = sklearn.model_selection.GroupShuffleSplit(n_splits=1, train_size=train_size , random_state=random_state)
+    gss = ms.GroupShuffleSplit(n_splits=1, train_size=train_size , random_state=random_state)
     train_idx, test_idx = next(gss.split(X,y, groups=groups))
 
-    X_other = X.iloc[train_idx]
+    #allocate the datasets
+    X_train = X.iloc[train_idx]
     X_test = X.iloc[test_idx]
-    y_other = y.iloc[train_idx]
+    y_train = y.iloc[train_idx]
     y_test = y.iloc[test_idx]
 
+    #extract the groups for cross-validation and drop the subject information
+    groups = X_train.subject
     X_test = X_test.drop(columns="subject")
+    X_train = X_train.drop(columns="subject")
     y_test = y_test.drop(columns="subject")
+    y_train = y_train.drop(columns="subject")
 
-    #split further into validation and training data
-    training_subjects = X_other.subject.unique()
-    rng = np.random.default_rng(seed=random_state)
-    rng.shuffle(training_subjects)
-
-    val_subjects = training_subjects[:1]
-    other_subjects = training_subjects[1:]
-
-    val_mask = X_other.subject.isin(val_subjects)
-    train_mask = X_other.subject.isin(other_subjects)
-
-    X_valid = X_other[val_mask].drop(columns="subject")
-    X_train = X_other[train_mask].drop(columns="subject")
-    y_valid = y_other[val_mask].drop(columns="subject")
-    y_train = y_other[train_mask].drop(columns="subject")
-
-    return X_train, y_train, X_valid, y_valid, X_test, y_test
+    return X_train, y_train, X_test, y_test, groups
 
 def plot_correlation(X,y,name):
     """
@@ -118,5 +106,5 @@ def plot_correlation(X,y,name):
     fig.savefig(name,dpi=300, bbox_inches="tight")
 
 df = pd.read_csv("segments.csv")
-X_train, y_train, X_valid, y_valid, X_test, y_test = prepare_data(df,42)
-create_profile(X_test)
+X_train, y_train, X_test, y_test, groups = prepare_data(df,42)
+create_profile(X_train)
