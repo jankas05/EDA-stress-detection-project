@@ -1,7 +1,7 @@
 import wfdb
 import numpy
 import numpy._core.numeric as _nx
-import cvxEDA
+from cvxEDA.src.cvxEDA import cvxEDA
 import pylab as pl
 import scipy as sp
 from scipy.signal import find_peaks
@@ -70,7 +70,7 @@ def components_separation(segment:list, fs=8):
 
         #normalize and separate the components
         segment_norm = zscore(segment)
-        [r, p, t, l, d, e, obj] = cvxEDA.cvxEDA(segment_norm, 1./fs)
+        [r, p, t, l, d, e, obj] = cvxEDA(segment_norm, 1./fs)
 
         return [r, p, t, l, d, e, obj]
 
