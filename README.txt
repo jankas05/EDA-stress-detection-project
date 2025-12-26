@@ -8,10 +8,11 @@ Currently following functionalities are implemented:
 -Feature Extraction
 -Database (not fully supported)
 -CSV export of data
-
-Planned functionalities:
 -Data splitting
 -Classification using machine learning techniques
+
+Planned functionalities:
+-Testing and saving
 -Accuracy review
 
 Optional functionalities:
