@@ -1,7 +1,7 @@
 import segmentation as seg
 import pandas as pd
 import ydata_profiling
-from yellowbrick.features import Rank2D
+from yellowbrick.features import (Rank2D, RadViz)
 import matplotlib.pyplot as plt
 import sklearn.model_selection as ms
 import numpy as np
@@ -47,6 +47,22 @@ def create_profile(df):
 
     return True
 
+def pre_prepare_data(df):
+    """
+    Basic preprocessing of the data. Drop all NaN rows and separates the features.
+    
+    :param df: panda dataframe containing all data
+
+    :return new_df: new panda dataframe without NaN rows
+    :return X: panda dataframe with features
+    :return y: panda dataframe with the estimator feature
+    """
+    #basic preprocessing
+    new_df = df.dropna()
+    y = new_df.stress
+    X = new_df.drop(columns = ["stress"])
+    return new_df,X,y
+
 def prepare_data(df, random_state):
     """
     Prepares the data for classification. Drops all NaN rows, separates the 
@@ -63,13 +79,12 @@ def prepare_data(df, random_state):
     """
 
     #basic preprocessing
-    df1 = df.dropna()
-    y = df1.stress
-    X = df1.drop(columns = ["stress"])
+    new_df,X,y = pre_prepare_data(df)
 
     #split the dataset into training and testing sets
-    groups = df1.subject
-    train_size = (len(df.subject.unique()) - ceil(0.1 * len(df.subject.unique()))) / len(df.subject.unique())
+    groups = new_df.subject
+    number_of_subjects = new_df.subject.unique()
+    train_size = (len(number_of_subjects) - ceil(0.1 * len(number_of_subjects))) / len(number_of_subjects)
     gss = ms.GroupShuffleSplit(n_splits=1, train_size=train_size , random_state=random_state)
     train_idx, test_idx = next(gss.split(X,y, groups=groups))
 
@@ -197,14 +212,40 @@ def plot_correlation(X,y,name):
     None
     """
 
-    fig,ax = plt.subplots(figsize = (6,6))
+    fig,ax = plt.subplots(figsize = (12,12))
     pcv = Rank2D(features=X.columns, algorithm ="pearson")
     pcv.fit(X,y)
     pcv.transform(X)
     pcv.poof()
     fig.savefig(name,dpi=300, format = "svg", bbox_inches="tight")
 
+def plot_radviz(X, y, name):
+    """
+    Reads a panda dataframe and plots a RadViz plot and saves it under the given path/name.
+
+    :param X: panda dataframe with the features
+    :param y: panda dataframe with the estimator feature
+    :param name: path/name to save the plot
+    """
+    #fix indices for yellowbrick
+    X = X.drop(columns="subject")
+    X = X.reset_index(drop=True)
+    y = y.reset_index(drop=True)
+
+    #plot the radviz
+    fig,ax = plt.subplots(figsize = (12,12))
+    rv = RadViz(classes=["no_stress","stress"], features=X.columns, ax=ax)
+    rv.fit(X,y)
+    rv.show()
+    fig.savefig(name, dpi=300, format="svg",bbox_inches ="tight")
+    return True
+
 df = pd.read_csv("segments.csv")
+#for data vizualisation
+#new_df, X, y = pre_prepare_data(df)
+#plot_radviz(X, y, "results/radviz.svg")
+#plot_correlation(X.drop(columns=["subject"]),y,"results/correlation.svg")
+#create_profile(X)
+
 X_train, y_train, X_test, y_test, groups = prepare_data(df,42)
-#create_profile(X_train)
 train_model(X_train, y_train, groups, "nb",42)
