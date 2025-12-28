@@ -68,15 +68,15 @@ def pre_prepare_data(df):
 def prepare_data(df, random_state):
     """
     Prepares the data for classification. Drops all NaN rows, separates the 
-    infodata and the classification feature.
+    infodata and the estimator feature.
 
     :param df: panda dataframe \n
     :param random_state: number to reproduce or randomize splitting
 
     :return X_train: panda dataframe of all other relevant features for training \n
-    :return y_train: panda dataframe with the classification feature for training\n
+    :return y_train: panda series with the estimator feature for training\n
     :return X_test:  panda dataframe of all other relevant features for testing \n
-    :return y_test:  panda dataframe with the classification feature for testing \n
+    :return y_test:  panda series with the estimator feature for testing \n
     :return groups:  array with the group indices for cross-validation
     """
 
@@ -188,6 +188,7 @@ def train_model(X_train, y_train, groups, model_select, random_state ):
             return False 
         
     #calculate prefitting scores, perform a randomized search; change the n_iter parameter if needed
+    print("Training", model_select)
     prefitting_scores = ms.cross_val_score(predefined_model, X_train, y_train, groups=groups, cv=gss)
     print("Prefitting Scores:", prefitting_scores)
     gs = ms.RandomizedSearchCV(estimator=model, 
@@ -207,8 +208,13 @@ def evaluate_model(model, X_test, y_test):
     Docstring for evaluate_model
     
     :param model: sklearn machine learning model
-    :param X_test: features to test on
-    :param y_test: estimator feature to test on
+    :param X_test: panda dataframe of all other relevant features for testing
+    :param y_test: panda series with the estimator feature for testing
+    
+    :return accuracy: accuracy score of the model on the test set
+    :return recall: recall score of the model on the test set
+    :return precision: precision score of the model on the test set
+    :return f1: f1 score of the model on the test set
     """
     y_predict = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_predict)
@@ -217,6 +223,54 @@ def evaluate_model(model, X_test, y_test):
     f1 = f1_score(y_test, y_predict)
 
     return accuracy, recall, precision, f1
+def form_evaluation_entry(X_train, y_train, X_test, y_test, groups, model_select, random_state):
+    """
+    Forms a dictionary with the model, random_state and all relevant evaluation metrics.
+    
+    :param X_train: panda dataframe of all other relevant features for training
+    :param y_train: panda series with the estimator feature for training
+    :param X_test: panda dataframe of all other relevant features for testing
+    :param y_test: panda series with the estimator feature for testing
+    :param groups: array with the group indices for cross-validation
+    :param model_select: The machine learning algorithm upon which the data will be trained. Has to be 
+    either "knn", "svm", "nb", "lr" or "rf"
+    :param random_state: int to add reproducability to the results
+
+    :return evaluation: dictionary with all relevant evaluation metrics
+    """
+    model = train_model(X_train, y_train, groups, model_select, random_state)
+    v = evaluate_model(model, X_test, y_test)
+    evaluation = {"model": model_select, "random_state": random_state, "accuracy": v[0], "recall": v[1], "precision": v[2], "f1_score": v[3]}
+    return evaluation
+
+def gather_evaluation_metrics(df, random_state, repetitions):
+    """
+    Runs multiple evaluations of all models with different data splits each time and writes the results  
+    into an array of dictionaries.
+
+    :param df: panda dataframe 
+    :param random_state: int to add reproduceability to the results
+    :param repetitions: number of times the evaluations will be repeated on different data
+    """
+    evaluation_database =[]
+    for i in range(repetitions):
+        kwargs = prepare_data(df, random_state+i)
+        evaluation_database.append(form_evaluation_entry(*kwargs,"knn", random_state+i))
+        evaluation_database.append(form_evaluation_entry(*kwargs,"svm", random_state+i))
+        evaluation_database.append(form_evaluation_entry(*kwargs,"nb", random_state+i))
+        evaluation_database.append(form_evaluation_entry(*kwargs,"lr", random_state+i))
+        evaluation_database.append(form_evaluation_entry(*kwargs,"rf", random_state+i))
+    return evaluation_database
+def save_evaluation_database(evaluation_database, name):
+    """
+    Saves the evaluation database as a .csv file.
+
+    :param evaluation_database: array of dictionaries with evaluation metrics
+    :param name: path/name to save the .csv file
+    """
+    df = pd.DataFrame(evaluation_database)
+    df.to_csv(name, index=False)
+    return True
 
 def plot_correlation(X,y,name):
     """
@@ -286,5 +340,5 @@ df = pd.read_csv("segments.csv")
 #create_profile(X)
 #plot_confusion_matrix(best_model, X_test, y_test, "results/confusion_matrix.svg")
 
-X_train, y_train, X_test, y_test, groups = prepare_data(df,42)
-best_model = train_model(X_train, y_train, groups, "lr",42)
+save_evaluation_database(gather_evaluation_metrics(df,42,10), "results/results.csv")
+
