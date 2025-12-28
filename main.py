@@ -2,6 +2,7 @@ import segmentation as seg
 import pandas as pd
 import ydata_profiling
 from yellowbrick.features import (Rank2D, RadViz)
+from yellowbrick.classifier import ConfusionMatrix
 import matplotlib.pyplot as plt
 import sklearn.model_selection as ms
 import numpy as np
@@ -11,6 +12,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (accuracy_score, recall_score, precision_score, f1_score)
 
 def get_database():
     """
@@ -200,6 +202,22 @@ def train_model(X_train, y_train, groups, model_select, random_state ):
     print("Postfitting Scores:", postfitting_scores)
     return best_model
 
+def evaluate_model(model, X_test, y_test):
+    """
+    Docstring for evaluate_model
+    
+    :param model: sklearn machine learning model
+    :param X_test: features to test on
+    :param y_test: estimator feature to test on
+    """
+    y_predict = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_predict)
+    recall = recall_score(y_test, y_predict)
+    precision = precision_score(y_test, y_predict)
+    f1 = f1_score(y_test, y_predict)
+
+    return accuracy, recall, precision, f1
+
 def plot_correlation(X,y,name):
     """
     Plots a correlation heatmap and saves it under the given path/name.
@@ -207,6 +225,7 @@ def plot_correlation(X,y,name):
     arguments: \n
     :param X: panda dataframe, which will be examined \n
     :param y: panda dataframe, not important
+    :param name: path/name to save the plot
 
     returns: \n
     None
@@ -218,6 +237,7 @@ def plot_correlation(X,y,name):
     pcv.transform(X)
     pcv.poof()
     fig.savefig(name,dpi=300, format = "svg", bbox_inches="tight")
+    return True
 
 def plot_radviz(X, y, name):
     """
@@ -240,12 +260,31 @@ def plot_radviz(X, y, name):
     fig.savefig(name, dpi=300, format="svg",bbox_inches ="tight")
     return True
 
+def plot_confusion_matrix(model, X_test, y_test, name):
+    """
+    Plots a confusion matrix for a given model and saves it under the given path/name.
+    
+    :param model: the model to be evaluated on the new dataset
+    :param X_test: new feature dataset
+    :param y_test: new estimator feature dataset
+    :param name:   path/name to save the plot
+    """
+    mapping = {0: "no stress", 1: "stress"}
+    fig,ax = plt.subplots(figsize=(12,12))
+    cm_viz = ConfusionMatrix(model, classes=["no stress", "stress"], encoder=mapping, force_model=True)
+    cm_viz.score(X_test, y_test)
+    cm_viz.show()
+    fig.savefig(name, dpi=300, format="svg", bbox_inches="tight")
+    return True
+
 df = pd.read_csv("segments.csv")
+
 #for data vizualisation
 #new_df, X, y = pre_prepare_data(df)
 #plot_radviz(X, y, "results/radviz.svg")
 #plot_correlation(X.drop(columns=["subject"]),y,"results/correlation.svg")
 #create_profile(X)
+#plot_confusion_matrix(best_model, X_test, y_test, "results/confusion_matrix.svg")
 
 X_train, y_train, X_test, y_test, groups = prepare_data(df,42)
-train_model(X_train, y_train, groups, "nb",42)
+best_model = train_model(X_train, y_train, groups, "lr",42)
