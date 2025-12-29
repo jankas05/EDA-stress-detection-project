@@ -332,6 +332,7 @@ def plot_confusion_matrix(model, X_test, y_test, name):
     return True
 
 df = pd.read_csv("segments.csv")
+df_results = pd.read_csv("results/results.csv")
 
 #for data vizualisation
 #new_df, X, y = pre_prepare_data(df)
@@ -340,5 +341,13 @@ df = pd.read_csv("segments.csv")
 #create_profile(X)
 #plot_confusion_matrix(best_model, X_test, y_test, "results/confusion_matrix.svg")
 
-save_evaluation_database(gather_evaluation_metrics(df,42,10), "results/results.csv")
+#takes about 2 hours to run
+#save_evaluation_database(gather_evaluation_metrics(df,42,10), "results/results.csv")
+
+#plot boxplot for presentation
+#fig, ax = plt.subplots(figsize=(12,6))
+#df_results.boxplot(by='model', column=["accuracy"],ax=ax)
+#fig.savefig("results/boxplot.svg", dpi=300, format="svg", bbox_inches="tight")
+
+    
 
