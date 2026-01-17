@@ -431,7 +431,7 @@ def export_database(file_name,dictionary):
 
 
                 
-def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list):
+def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list, title:str):
         """
         Plots a given segment with the phasic components and saves it under a name as a svg file.
 
@@ -439,14 +439,19 @@ def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list)
         :param segment: A numpy array with a segment of the signal.
         :param phasic_segment: A numpy array with the phasic component of a segment. 
         :param tonic_segment: A numpy array with the tonic component of a segment. 
+        :param title: The title of the plot.
 
         returns:
         A visual representation of the segment and a svg file with the representation.
         """
         tm = pl.arange(1., len(segment)+1.) / 8
-        pl.plot(tm, segment, color='b', label="Segment") #blue
+        pl.plot(tm, segment, color='k', label="Segment") #black
         pl.plot(tm, phasic_segment, color='r', label="Phasic component") #red
-        pl.plot(tm, tonic_segment, color='k', label="Tonic component") #black
+        pl.plot(tm, tonic_segment, color='b', label="Tonic component") #blue
+
+        pl.title(title)
+        pl.xlabel("Time (s)")
+        pl.ylabel("Amplitude")
         pl.legend(loc="lower right")
         pl.savefig(name, format='svg',dpi=300, bbox_inches='tight')
         pl.show()
@@ -482,8 +487,11 @@ def test_cases():
         print("finished grouping by subject")
 
 #test_cases()
-#database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
+database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
 #export_database("segments.csv", database)
 
-#plot_segment("results/stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4))
-#plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4))
+#plot_segment("results/non_stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4),"EDA Signal Decomposition - Nonstress Segment")
+#plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4),"EDA Signal Decomposition - Stress Segment") 
+
+plot_segment("results/non_stress_segment_alt.svg", get_subject_data(1,0,16), get_subject_data(1,2,16), get_subject_data(1,4,16),"EDA Signal Decomposition - Nonstress Segment")
+plot_segment("results/stress_segment_alt.svg", get_subject_data(1,1,16), get_subject_data(1,3,16), get_subject_data(1,5,16),"EDA Signal Decomposition - Stress Segment") 
