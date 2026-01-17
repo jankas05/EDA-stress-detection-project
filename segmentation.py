@@ -18,8 +18,9 @@ def download_dataset():
         records = []
         for i in range(20):
                 records.append("Subject" + str(i+1) +"_AccTempEDA")
-        wfdb.dl_database(db_dir="noneeg", dl_dir="data/", records=records, annotators="all",overwrite=True)
+        wfdb.dl_database(db_dir="noneeg", dl_dir="data/", records=records, annotators="all",overwrite=False)
         return True
+
 def custom_split(ary:list, number_of_entries:int):
         """
         Splits an array into multiple arrays. 
@@ -72,24 +73,41 @@ def extract_annotation(record:str, extension:str):
         annotation = wfdb.rdann(record, extension)
         return annotation.sample
 
-def components_separation(segment:list, fs=8):
+def components_separation(signal:list, method:str,fs=8):
         """
         Separates an EDA signal into its SCL(tonic) and SCR(phasic) components
         as shown in the cvxEDA paper.
         
         :param segment: A numpy array with the EDA signal.
+        :param method: The method of component seperation to be used. Has to be "cvxEDA", 
+        "smoothmedian', "highpass" or "sparseeda".
         :param fs: The sampling frequency of the signal. Defaults to 8Hz.
 
-        :return list: Array of returns from the cvxEDA function
+        :return list: Array of the phasic and tonic component.
         """
 
         #normalize and separate the components
-        segment_norm = zscore(segment)
-        [r, p, t, l, d, e, obj] = cvxEDA(segment_norm, 1./fs)
+        cleaned_signal = nk.eda_clean(signal)
+        normed_signal = zscore(cleaned_signal, fs)
+        match method:
+                case "cvxEDA":
+                        [r, p, t, l, d, e, obj] = cvxEDA(normed_signal, 1./fs)
+                        components = [r,t]
+                case "smoothmedian":
+                        df_components = nk.eda_phasic(normed_signal, fs, method=method)
+                        components = df_components.to_numpy()
+                case "highpass":
+                        df_components = nk.eda_phasic(normed_signal, fs, method=method)
+                        components = df_components.to_numpy()
+                case "sparseeda":
+                        df_components = nk.eda_phasic(normed_signal, fs, method=method)
+                        components = df_components.to_numpy()
+                case "_":
+                        return False
+        return components
 
-        return [r, p, t, l, d, e, obj]
 
-def segment_signal(record:str,channel:list, segment_length:int):
+def segment_signal(record:str,channel:list, segment_length:int, method:str):
         """
         Segment a WFDB record of a given channel into given lengths in seconds.
         This function also separates the signal in the SCL,SCR components
@@ -124,7 +142,7 @@ def segment_signal(record:str,channel:list, segment_length:int):
 
         #calculate the length of each segment
         entries_in_segment = int(sampling_frequency * segment_length)
-        components = components_separation(signal)
+        components = components_separation(signal, method)
 
 
         #initialize the arrays for the segments
@@ -151,16 +169,16 @@ def segment_signal(record:str,channel:list, segment_length:int):
         phasic_stress.extend(custom_split( components[0][EMOT_START : RELAX_FOUR_START], entries_in_segment))
         phasic_non_stress.extend(custom_split( components[0][RELAX_FOUR_START : ], entries_in_segment))
 
-        tonic_non_stress.extend(custom_split( components[2][RELAX_ONE_START : PHYS_START],entries_in_segment))
-        tonic_non_stress.extend(custom_split( components[2][RELAX_TWO_START : COGN_START],entries_in_segment))
-        tonic_stress.extend(custom_split( components[2][COGN_START : RELAX_THREE_START], entries_in_segment))
-        tonic_non_stress.extend(custom_split( components[2][RELAX_THREE_START : EMOT_START], entries_in_segment))
-        tonic_stress.extend(custom_split( components[2][EMOT_START : RELAX_FOUR_START], entries_in_segment))
-        tonic_non_stress.extend(custom_split( components[2][RELAX_FOUR_START : ], entries_in_segment))       
+        tonic_non_stress.extend(custom_split( components[1][RELAX_ONE_START : PHYS_START],entries_in_segment))
+        tonic_non_stress.extend(custom_split( components[1][RELAX_TWO_START : COGN_START],entries_in_segment))
+        tonic_stress.extend(custom_split( components[1][COGN_START : RELAX_THREE_START], entries_in_segment))
+        tonic_non_stress.extend(custom_split( components[1][RELAX_THREE_START : EMOT_START], entries_in_segment))
+        tonic_stress.extend(custom_split( components[1][EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        tonic_non_stress.extend(custom_split( components[1][RELAX_FOUR_START : ], entries_in_segment))       
 
         return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
 
-def group_one_data(directory:str, channel:list, subject_number:int, segment_length:int):
+def group_one_data(directory:str, channel:list, subject_number:int, segment_length:int, method:str):
         """
         Groups one subjects data into stress and non stress categories.
         Mostly a wrapper for the segment_signal function.
@@ -181,10 +199,10 @@ def group_one_data(directory:str, channel:list, subject_number:int, segment_leng
         #figure out the name of the subject file and extract the data
         record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
         non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress = segment_signal(record=record_name, channel=channel, 
-                                        segment_length=segment_length)
+                                        segment_length=segment_length, method=method)
         return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
 
-def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int):
+def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int, method:str):
         """
         Groups all subject data, counting from the first to the data_count subject, into stress and non stress segments. 
         The data is grouped into these two categories, therefore it cannot be traced
@@ -211,7 +229,7 @@ def group_all_data_by_segments(directory:str, channel:list, data_count:int, segm
 
         #go through the subject data and group it into the stress and non stress categories
         for i in range(data_count):
-                temp_stress, temp_non_stress, _ ,_ = group_one_data(directory, channel, i+1, segment_length)
+                temp_stress, temp_non_stress, _ ,_ = group_one_data(directory, channel, i+1, segment_length, method)
                 non_stress_segments.extend(temp_non_stress)
                 stress_segments.extend(temp_stress)
 
@@ -384,12 +402,12 @@ def form_feature_vector(segment:list, phasic_segment:list):
 
         :return feature_vector: A feature vector as seen in the paper in the description.
         """
-        #here comes the neurokit implementation
+
         scr_onsets, scr_amplitudes, scr_recoveries = calculate_scr_features(phasic_segment)
-        
         return [segment.mean(), numpy.min(segment), numpy.max(segment), segment.std(), numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), numpy.mean(scr_recoveries)]
 
-def form_database(directory, channel, data_count, segment_length):
+
+def form_database(directory:str, channel:list, data_count:int, segment_length:int, method:str):
         """
         Forms a dictionary called database with feature vectors and some information about them. 
         database = [{subject, seg_mean, seg_min, seg_max, seg_std, rc_onsets, rc_amp, rc_rec, stress},...]
@@ -402,7 +420,7 @@ def form_database(directory, channel, data_count, segment_length):
         :return database: A database array with dictionaries as entries. See description above the 
         """
         #segment the data, group it and store it into an global array
-        group_all_data_by_subject(directory, channel, data_count, segment_length)
+        group_all_data_by_subject(directory, channel, data_count, segment_length, method)
 
         database = []
         #form the database
@@ -419,7 +437,7 @@ def form_database(directory, channel, data_count, segment_length):
                                 database.append(subject)  
         return database
                              
-def export_database(file_name,dictionary):
+def export_database(file_name:str ,dictionary:list):
         """
         Export a dictionary to a csv file. Creates a csvfile and stores it
         in the location of this file.
@@ -498,7 +516,7 @@ def test_cases():
 #test_cases()
 #database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
 #export_database("segments.csv", database)
-download_dataset()
+#download_dataset()
 #plot_segment("results/non_stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4),"EDA Signal Decomposition - Nonstress Segment")
 #plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4),"EDA Signal Decomposition - Stress Segment") 
 

@@ -14,7 +14,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (accuracy_score, recall_score, precision_score, f1_score)
 
-def get_database():
+def get_database(method):
     """
     Forms the database and exports it into a .csv file. Uses the default settings.
 
@@ -27,8 +27,8 @@ def get_database():
 
     EDA = [4]
     seg.download_dataset()
-    database = seg.form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
-    seg.export_database("segments.csv", database)
+    database = seg.form_database(directory="data", channel=EDA, data_count=20, segment_length=30, method=method)
+    seg.export_database(method + "_segments.csv", database)
     
     return True
 
@@ -224,6 +224,7 @@ def evaluate_model(model, X_test, y_test):
     f1 = f1_score(y_test, y_predict)
 
     return accuracy, recall, precision, f1
+
 def form_evaluation_entry(X_train, y_train, X_test, y_test, groups, model_select, random_state):
     """
     Forms a dictionary with the model, random_state and all relevant evaluation metrics.
@@ -262,6 +263,7 @@ def gather_evaluation_metrics(df, random_state, repetitions):
         evaluation_database.append(form_evaluation_entry(*kwargs,"lr", random_state+i))
         evaluation_database.append(form_evaluation_entry(*kwargs,"rf", random_state+i))
     return evaluation_database
+
 def save_evaluation_database(evaluation_database, name):
     """
     Saves the evaluation database as a .csv file.
@@ -272,6 +274,44 @@ def save_evaluation_database(evaluation_database, name):
     df = pd.DataFrame(evaluation_database)
     df.to_csv(name, index=False)
     return True
+
+def gather_results(method:str):
+    """
+    Gathers results by using machine learning to predict stress with the help of a 
+    specified component seperation method.
+    
+    :param method: The method of component seperation to be used. Has to be "cvxEDA", 
+        "smoothmedian', "highpass" or "sparseeda".
+    """
+    #create segments, use component seperation, establish database
+    get_database(method)
+    df = pd.read_csv(method + "_segments.csv")
+
+    #evaluate machine learning models
+    save_evaluation_database(gather_evaluation_metrics(df, 42, 10),"results/model_evaluation/"+ method + "_results.csv")
+
+    #get averages and save them
+    df_results=pd.read_csv("results/model_evaluation/"+ method + "_results.csv")
+    df_mean = df_results.groupby("model", as_index=False)[["accuracy","recall","precision", "f1_score"]].mean()
+    df_mean.to_csv("results/model_evaluation/mean_"+ method + "_results.csv", index=False)
+
+    #plot a boxplot to show the results
+    fig, ax = plt.subplots(figsize=(12,6))
+    df_results.boxplot(by='model', column=["accuracy"],ax=ax)
+    fig.savefig("results/" + method + "_boxplot.svg", dpi=300, format="svg", bbox_inches="tight")
+
+    return True
+
+def evaluate_component_separation():
+    """
+    Evaluates component seperation by using models provided by neurokit.
+    """
+    gather_results("cvxEDA")
+    gather_results("smoothmedian")
+    gather_results("highpass")
+    gather_results("sparseeda")
+    return True
+
 
 def plot_correlation(X,y,name):
     """
@@ -342,13 +382,14 @@ df_results = pd.read_csv("results/results.csv")
 #create_profile(X)
 #plot_confusion_matrix(best_model, X_test, y_test, "results/confusion_matrix.svg")
 
-#takes about 2 hours to run
-#save_evaluation_database(gather_evaluation_metrics(df,42,10), "results/results.csv")
+#paper results
+#gather_results("cvxEDA")
 
-#plot boxplot for presentation
-#fig, ax = plt.subplots(figsize=(12,6))
-#df_results.boxplot(by='model', column=["accuracy"],ax=ax)
-#fig.savefig("results/boxplot.svg", dpi=300, format="svg", bbox_inches="tight")
+#component seperation results
+evaluate_component_separation()
+
+
+
 
     
 
