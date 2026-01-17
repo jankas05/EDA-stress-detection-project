@@ -11,6 +11,15 @@ import neurokit2 as nk
 EDA = [4]
 FS = 8
 
+def download_dataset():
+        """
+        Downloads the UTD dataset with only ACC, Temp and EDA data.
+        """
+        records = []
+        for i in range(20):
+                records.append("Subject" + str(i+1) +"_AccTempEDA")
+        wfdb.dl_database(db_dir="noneeg", dl_dir="data/", records=records, annotators="all",overwrite=True)
+        return True
 def custom_split(ary:list, number_of_entries:int):
         """
         Splits an array into multiple arrays. 
@@ -487,11 +496,11 @@ def test_cases():
         print("finished grouping by subject")
 
 #test_cases()
-database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
+#database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
 #export_database("segments.csv", database)
-
+download_dataset()
 #plot_segment("results/non_stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4),"EDA Signal Decomposition - Nonstress Segment")
 #plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4),"EDA Signal Decomposition - Stress Segment") 
 
-plot_segment("results/non_stress_segment_alt.svg", get_subject_data(1,0,16), get_subject_data(1,2,16), get_subject_data(1,4,16),"EDA Signal Decomposition - Nonstress Segment")
-plot_segment("results/stress_segment_alt.svg", get_subject_data(1,1,16), get_subject_data(1,3,16), get_subject_data(1,5,16),"EDA Signal Decomposition - Stress Segment") 
+#plot_segment("results/non_stress_segment_alt.svg", get_subject_data(1,0,16), get_subject_data(1,2,16), get_subject_data(1,4,16),"EDA Signal Decomposition - Nonstress Segment")
+#plot_segment("results/stress_segment_alt.svg", get_subject_data(1,1,16), get_subject_data(1,3,16), get_subject_data(1,5,16),"EDA Signal Decomposition - Stress Segment") 

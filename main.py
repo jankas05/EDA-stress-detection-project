@@ -26,6 +26,7 @@ def get_database():
     """
 
     EDA = [4]
+    seg.download_dataset()
     database = seg.form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
     seg.export_database("segments.csv", database)
     

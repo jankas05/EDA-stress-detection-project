@@ -8,4 +8,5 @@ share/
 pyvenv.cfg
 segments.csv
 images/
+data/
 profile.html
