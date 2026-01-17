@@ -3,10 +3,10 @@ import numpy
 import numpy._core.numeric as _nx
 from cvxEDA.src.cvxEDA import cvxEDA
 import pylab as pl
-import scipy as sp
 from scipy.signal import find_peaks
 from scipy.stats import zscore
 import csv
+import neurokit2 as nk
 
 EDA = [4]
 FS = 8
@@ -20,8 +20,10 @@ def custom_split(ary:list, number_of_entries:int):
         a given number of entries. If the last one array would be smaller than the given
         number, it is excluded from the new array.
 
-        returns:
-        sub_arys - a numpy array with subarrays of the given length
+        :param list: The list to be splitted.
+        :param number_of_entries: The number of entries after which the split occurs.
+
+        :return sub_arys: A numpy array with subarrays of the given length.
         """
 
         Ntotal = len(ary)
@@ -52,8 +54,10 @@ def extract_annotation(record:str, extension:str):
         """
         Extract annotation data from an WFDB annotation file.
 
-        returns:
-        annotation.sample - the annotation marks as written in the annotation file
+        :param record: An WFDB annotation data file. Has to be a path if the file is not in the current directory.
+        :param extension: The file type of the annotation file. Usually set to "atr".
+
+        :return sample: The annotation marks as written in the annotation file.
         """
 
         annotation = wfdb.rdann(record, extension)
@@ -63,9 +67,11 @@ def components_separation(segment:list, fs=8):
         """
         Separates an EDA signal into its SCL(tonic) and SCR(phasic) components
         as shown in the cvxEDA paper.
+        
+        :param segment: A numpy array with the EDA signal.
+        :param fs: The sampling frequency of the signal. Defaults to 8Hz.
 
-        returns: 
-        list of returns from the cvxEDA function
+        :return list: Array of returns from the cvxEDA function
         """
 
         #normalize and separate the components
@@ -74,15 +80,22 @@ def components_separation(segment:list, fs=8):
 
         return [r, p, t, l, d, e, obj]
 
-def segment_signal(record:str,channel:list, segment_length_s:int):
+def segment_signal(record:str,channel:list, segment_length:int):
         """
         Segment a WFDB record of a given channel into given lengths in seconds.
         This function also separates the signal in the SCL,SCR components
         as seen in the cvxEDA module.
 
-        returns:
-        stress_signal - a numpy array with the stress signal segments
-        non_stress_signal - a numpy array with the non stress signal segments
+        :param record: A WFDB data file with the signal.
+        :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
+        :param segment_length: The length of each segment in seconds.
+
+        :return non_stress: A 2d numpy array with the non stress signal segments.
+        :return stress: A 2d numpy array with the stress signal segments.
+        :return phasic_non_stress: A 2d numpy array with the phasic component of non stress segments.
+        :return phasic_stress: A 2d numpy array with the the phasic component of stress segments.
+        :return tonic_non_stress: A 2d numpy array with the tonic component of non stress segments.
+        :return tonic_stress: A 2d numpy array with the tonic component of stress segements.
         """
 
         #read the signal and extract basic data and annotations
@@ -101,13 +114,13 @@ def segment_signal(record:str,channel:list, segment_length_s:int):
         RELAX_FOUR_START = annotation_points[7]
 
         #calculate the length of each segment
-        entries_in_segment = int(sampling_frequency * segment_length_s)
+        entries_in_segment = int(sampling_frequency * segment_length)
         components = components_separation(signal)
 
 
         #initialize the arrays for the segments
-        non_stress_signal =[]
-        stress_signal =[]
+        non_stress =[]
+        stress =[]
         phasic_stress =[]
         phasic_non_stress =[]
         tonic_stress = []
@@ -115,12 +128,12 @@ def segment_signal(record:str,channel:list, segment_length_s:int):
 
 
         #split the data using the custom splitting algorithm
-        non_stress_signal.extend(custom_split( signal[RELAX_ONE_START : PHYS_START],entries_in_segment))
-        non_stress_signal.extend(custom_split( signal[RELAX_TWO_START : COGN_START],entries_in_segment))
-        stress_signal.extend(custom_split( signal[COGN_START : RELAX_THREE_START], entries_in_segment))
-        non_stress_signal.extend(custom_split( signal[RELAX_THREE_START : EMOT_START], entries_in_segment))
-        stress_signal.extend(custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment))
-        non_stress_signal.extend(custom_split( signal[RELAX_FOUR_START : ], entries_in_segment))
+        non_stress.extend(custom_split( signal[RELAX_ONE_START : PHYS_START],entries_in_segment))
+        non_stress.extend(custom_split( signal[RELAX_TWO_START : COGN_START],entries_in_segment))
+        stress.extend(custom_split( signal[COGN_START : RELAX_THREE_START], entries_in_segment))
+        non_stress.extend(custom_split( signal[RELAX_THREE_START : EMOT_START], entries_in_segment))
+        stress.extend(custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        non_stress.extend(custom_split( signal[RELAX_FOUR_START : ], entries_in_segment))
 
         phasic_non_stress.extend(custom_split( components[0][RELAX_ONE_START : PHYS_START],entries_in_segment))
         phasic_non_stress.extend(custom_split( components[0][RELAX_TWO_START : COGN_START],entries_in_segment))
@@ -136,34 +149,46 @@ def segment_signal(record:str,channel:list, segment_length_s:int):
         tonic_stress.extend(custom_split( components[2][EMOT_START : RELAX_FOUR_START], entries_in_segment))
         tonic_non_stress.extend(custom_split( components[2][RELAX_FOUR_START : ], entries_in_segment))       
 
-        return non_stress_signal, stress_signal, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
+        return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
 
 def group_one_data(directory:str, channel:list, subject_number:int, segment_length:int):
         """
         Groups one subjects data into stress and non stress categories.
         Mostly a wrapper for the segment_signal function.
 
-        returns:
-        stress - a numpy array with segments(arrays) in the stress category
-        non_stress - a numpy array with segments(arrays) in the non stress category
+        :param directory: The directory in which the subject data is stored.
+        :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
+        :param subject_number: The number of the subject. In the case of the UTD dataset can be a number between 1 and 20.
+        :param segment_length: The length of each segment in seconds.
+
+        :return non_stress: A 2d numpy array with the non stress signal segments.
+        :return stress: A 2d numpy array with the stress signal segments.
+        :return phasic_non_stress: A 2d numpy array with the phasic component of non stress segments.
+        :return phasic_stress: A 2d numpy array with the the phasic component of stress segments.
+        :return tonic_non_stress: A 2d numpy array with the tonic component of non stress segments.
+        :return tonic_stress: A 2d numpy array with the tonic component of stress segements.
         """
 
         #figure out the name of the subject file and extract the data
         record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
         non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress = segment_signal(record=record_name, channel=channel, 
-                                        segment_length_s=segment_length)
+                                        segment_length=segment_length)
         return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
 
 def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int):
         """
-        Groups all subject data into stress and non stress segments. 
+        Groups all subject data, counting from the first to the data_count subject, into stress and non stress segments. 
         The data is grouped into these two categories, therefore it cannot be traced
         to a certain subject. 
-        Propably mostly for intern use, as group_all_data_by_subject function has in 
-        theory more functionality.
-
         Defines two global arrays stress_segments and non_stress_segments, through which 
         data can be accessed. 
+
+        Depreciated and not used in the project.
+
+        :param directory: The directory in which the subject data is stored.
+        :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
+        :param data_count: The number of subjects. 
+        :param segment_length: The length of each segment in seconds.
 
         returns:
         None
@@ -188,6 +213,11 @@ def group_all_data_by_subject(directory:str, channel:list, data_count:int, segme
         Defines a global array subject_data, through which the subject data can be accessed 
         by subject_data[subject_number][stress], in which stress is 1 and non stress 0.
 
+        :param directory: The directory in which the subject data is stored.
+        :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
+        :param data_count: The number of subjects. 
+        :param segment_length: The length of each segment in seconds.
+
         returns:
         None
         """
@@ -202,26 +232,29 @@ def group_all_data_by_subject(directory:str, channel:list, data_count:int, segme
                temp_subject = group_one_data(directory, channel, i+1, segment_length)
                subject_data.append(temp_subject)
 
-def get_subject_data(subject_number:int,type:int, segment_number=500):
+def get_subject_data(subject_number:int, type:int, segment_number=2048):
         """
         A Function to facilitate getting subject data.
 
-        If the function encounters an IndexError, the whole stress/non stress 
-        category of the given subject. 
+        If the function encounters an IndexError, the whole stress/non stress normal/phasic/tonic
+        category of the given subject is returned. 
         The subject_number is expected to be given from 1,...,n, e.g. to 
         access the first subject you have to use 1 as the subject_number
         (not 0, as you would normally as a programmer)
 
-        type=0: non stress segment
-        type=1: stress segment
-        type=2: phasic non stress segment
-        type=3: phasic stress segment
-        type=4: tonic non stress segment
-        type=5: tonic stress segment
+        type=0 - non stress segment, 
+        type=1 - stress segment, 
+        type=2 - phasic non stress segment, 
+        type=3 - phasic stress segment, 
+        type=4 - tonic non stress segment, 
+        type=5 - tonic stress segment
 
+        :param subject_number: The number of the subject.
+        :param type: The type of the segment, which will be returned. See the function description.
+        :param segment_number: The number of the segment which will be reurned. Can be omitted, to 
+        return all segments of the specified type of one subject.
 
-        returns:
-        specific segment or subject data
+        :return subject_data: specific segment or all segments of the specified type of one subject
         """
 
         try:
@@ -234,9 +267,13 @@ def scr_peaks(phasic_segment:list, plot=False):
         Finds all local extrema( peaks and throughs) within an array.
         This function can also plot the given segment with the found extrema.
 
+        :param phasic_segment: An array with the phasic component of a segment.
+        :param plot: A bool, whether to plot the segment or not. Mostly for debugging purposes.
+        Defaults to false.
+
         returns:
-        peaks - list of indices of found peaks
-        troughs - list of indices of found troughs
+        :return peaks: A list of indices of found peaks.
+        :return troughs:  A list of indices of found troughs.
         """
 
         #find peaks and troughs
@@ -255,16 +292,19 @@ def scr_peaks(phasic_segment:list, plot=False):
 
 def calculate_scr_features(phasic_segment:list):
         """
-        Calculate additional SCR features to form the feature vector.
+        Calculate additional SCR features to form the feature vector. Used for the cvxEDA algorithm
+        implementation. 
+
         For definitions of these features see:
         STRESS DETECTION THROUGH WRIST-BASED ELECTRODERMAL ACTIVITY MONITORING AND MACHINE LEARNING
 
-        returns:
-        scr_amplitudes - list of all measured amplitudes in the segment
-        scr_onsets - list of all measured onsets in the segment
-        scr_recoveries - list of all measured recovery times in s
+        :param phasic_segment: An array with the phasic component of a segment.
+
+        :return scr_amplitudes: A list of all measured amplitudes of the peaks in the segment.
+        :return scr_onsets: A list of all measured onsets in the segment.
+        :return scr_recoveries: A list of all measured recovery times in s.
         """
-        #not finished
+
         peaks, troughs = scr_peaks(phasic_segment)
         scr_amplitudes = []
         scr_onsets = []
@@ -325,12 +365,17 @@ def calculate_scr_features(phasic_segment:list):
                 
 def form_feature_vector(segment:list, phasic_segment:list):
         """
-        Forms the Feature vector as seen in the paper
+        Forms the Feature vector as seen in the paper.
+        The both parameters should correspond to the same segment.
+
         STRESS DETECTION THROUGH WRIST-BASED ELECTRODERMAL ACTIVITY MONITORING AND MACHINE LEARNING
 
-        returns:
-        feature vector as seen in the paper above
+        :param segment: A numpy array with a segment of the signal.
+        :param phasic_segment: A numpy array with the phasic component of a segment.  
+
+        :return feature_vector: A feature vector as seen in the paper in the description.
         """
+        #here comes the neurokit implementation
         scr_onsets, scr_amplitudes, scr_recoveries = calculate_scr_features(phasic_segment)
         
         return [segment.mean(), numpy.min(segment), numpy.max(segment), segment.std(), numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), numpy.mean(scr_recoveries)]
@@ -338,9 +383,14 @@ def form_feature_vector(segment:list, phasic_segment:list):
 def form_database(directory, channel, data_count, segment_length):
         """
         Forms a dictionary called database with feature vectors and some information about them. 
-        database = {subject, seg_mean, seg_min, seg_max, seg_std, rc_onsets, rc_amp, rc_rec, stress}
+        database = [{subject, seg_mean, seg_min, seg_max, seg_std, rc_onsets, rc_amp, rc_rec, stress},...]
 
-        returns: database
+        :param directory: The directory in which the subject data is stored.
+        :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
+        :param data_count: The number of subjects. 
+        :param segment_length: The length of each segment in seconds.
+
+        :return database: A database array with dictionaries as entries. See description above the 
         """
         #segment the data, group it and store it into an global array
         group_all_data_by_subject(directory, channel, data_count, segment_length)
@@ -364,6 +414,12 @@ def export_database(file_name,dictionary):
         """
         Export a dictionary to a csv file. Creates a csvfile and stores it
         in the location of this file.
+
+        :param file_name: The name under which the dictionary will be saved.
+        :param dictionary: The dictionarz which will be exported as a csv file.
+
+        returns:
+        A csv file with all relevant infomation in the current directory.
         """
         with open(file_name, 'w', newline='') as csvfile:
                 fieldnames = [ 'subject', 'seg_mean', 'seg_min', 'seg_max', 
@@ -375,15 +431,26 @@ def export_database(file_name,dictionary):
 
 
                 
-def plot_segment(segment:list, phasic_segment:list, tonic_segment:list):
+def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list):
         """
-        Plots a given segment with the phasic components.
+        Plots a given segment with the phasic components and saves it under a name as a svg file.
+
+        :param name: The name under which the svg file will be saved.
+        :param segment: A numpy array with a segment of the signal.
+        :param phasic_segment: A numpy array with the phasic component of a segment. 
+        :param tonic_segment: A numpy array with the tonic component of a segment. 
+
+        returns:
+        A visual representation of the segment and a svg file with the representation.
         """
         tm = pl.arange(1., len(segment)+1.) / 8
-        pl.plot(tm, segment, color='b') #blue
-        pl.plot(tm, phasic_segment, color='r') #red
-        pl.plot(tm, tonic_segment, color='k') #black
+        pl.plot(tm, segment, color='b', label="Segment") #blue
+        pl.plot(tm, phasic_segment, color='r', label="Phasic component") #red
+        pl.plot(tm, tonic_segment, color='k', label="Tonic component") #black
+        pl.legend(loc="lower right")
+        pl.savefig(name, format='svg',dpi=300, bbox_inches='tight')
         pl.show()
+        
 
         return True
 
@@ -415,8 +482,8 @@ def test_cases():
         print("finished grouping by subject")
 
 #test_cases()
-#form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
+#database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
 #export_database("segments.csv", database)
 
-#tested what a NaN segment looked like
-#plot_segment(get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4))
+#plot_segment("results/stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4))
+#plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4))
