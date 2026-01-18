@@ -73,6 +73,25 @@ def extract_annotation(record:str, extension:str):
         annotation = wfdb.rdann(record, extension)
         return annotation.sample
 
+def extract_signal(record:str, channel:list):
+        """
+        Extracts signal and annotations from a WFDB file.
+        
+        :param record: The name of the record to be read. Can be a path.
+        :type record: str
+        :param channel: Channels of the WFDB signal to be read. 
+        :type channel: list
+
+        :return signal: The extarcted signal.
+        :return sampling_frequency: The sampling frequency of the extracted signal. 
+        :return annotation_points: The extracted annotations from the annotation file of the signal.
+        """
+        signal,signal_data = wfdb.rdsamp(record_name=record, channels=channel,warn_empty=True)
+        annotation_points = extract_annotation(record=record,extension="atr")
+        sampling_frequency = signal_data["fs"]
+        signal_length = signal_data["sig_len"]
+        return signal, sampling_frequency, annotation_points
+
 def components_separation(signal:list, method:str,fs=8):
         """
         Separates an EDA signal into its SCL(tonic) and SCR(phasic) components
@@ -87,28 +106,19 @@ def components_separation(signal:list, method:str,fs=8):
         """
 
         #normalize and separate the components
-        normed_signal = zscore(signal)
+        if method not in ["cvxEDA", "smoothmedian", "highpass", "sparseeda"]: raise ValueError("Method not recognized")
+        signals, info = nk.eda_process(zscore(signal.ravel()), fs, method="neurokit", method_phasic=method, method_cleaning="neurokit", method_peaks="neurokit")
         components = []
-        match method:
-                case "cvxEDA":
-                        [r, p, t, l, d, e, obj] = cvxEDA(normed_signal, 1./fs)
-                        components = [r,t]
-                case "smoothmedian":
-                        df_components = nk.eda_phasic(normed_signal, fs, method=method)
-                        components.append(df_components["EDA_Tonic"].to_numpy())
-                        components.append(df_components["EDA_Phasic"].to_numpy())
-                case "highpass":
-                        df_components = nk.eda_phasic(normed_signal, fs, method=method)
-                        components.append(df_components["EDA_Tonic"].to_numpy())
-                        components.append(df_components["EDA_Phasic"].to_numpy())
-                case "sparseeda":
-                        df_components = nk.eda_phasic(normed_signal, fs, method=method)
-                        components.append(df_components["EDA_Tonic"].to_numpy())
-                        components.append(df_components["EDA_Phasic"].to_numpy())
-                case "_":
-                        return False
-        return components
+        
+        #extract other info for the feature vector
+        components.append(signals["EDA_Tonic"].to_numpy())
+        components.append(signals["EDA_Phasic"].to_numpy())
+        cleaned_signal = signals["EDA_Clean"].to_numpy()
+        scr_peaks = signals["SCR_Peaks"].to_numpy()
+        scr_onsets = signals["SCR_Onsets"].to_numpy()
+        recovery_time = signals["SCR_RiseTime"].to_numpy()
 
+        return components, cleaned_signal, scr_peaks, scr_onsets, recovery_time
 
 def segment_signal(record:str,channel:list, segment_length:int, method:str):
         """
@@ -128,14 +138,17 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
         :return phasic_stress: A 2d numpy array with the the phasic component of stress segments.
         :return tonic_non_stress: A 2d numpy array with the tonic component of non stress segments.
         :return tonic_stress: A 2d numpy array with the tonic component of stress segements.
+        :return peaks_non_stress: A 2d numpy array with the SCR peaks of non stress segments.
+        :return peaks_stress: A 2d numpy array with the SCR peaks of stress segments.
+        :return onsets_non_stress: A 2d numpy array with the SCR onsets of non stress segments.
+        :return onsets_stress: A 2d numpy array with the SCR onsets of stress segments.
+        :return recovery_non_stress: A 2d numpy array with the SCR recovery times of non stress segments.
+        :return recovery_stress: A 2d numpy array with the SCR recovery times of stress segments.
         """
 
-        #read the signal and extract basic data and annotations
-        signal,signal_data = wfdb.rdsamp(record_name=record, channels=channel,warn_empty=True)
-        annotation_points = extract_annotation(record=record,extension="atr")
-        sampling_frequency = signal_data["fs"]
-        signal_length = signal_data["sig_len"]
-        cleaned_signal = nk.eda_clean(signal, sampling_frequency)
+        #read the signal and extract data
+        signal, sampling_frequency, annotation_points = extract_signal(record, channel)
+        
 
         #annotation constants for easier readability
         RELAX_ONE_START = annotation_points[0]
@@ -148,16 +161,28 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
 
         #calculate the length of each segment
         entries_in_segment = int(sampling_frequency * segment_length)
-        components = components_separation(cleaned_signal, method)
+        components, cleaned_signal, scr_peaks, scr_onsets, recovery_time = components_separation(signal,method, sampling_frequency)
 
 
         #initialize the arrays for the segments
         non_stress =[]
         stress =[]
+
         phasic_stress =[]
         phasic_non_stress =[]
+
         tonic_stress = []
         tonic_non_stress =[]
+
+        peaks_non_stress =[]
+        peaks_stress =[]
+
+        onsets_non_stress =[]
+        onsets_stress =[]
+        
+        recovery_non_stress =[]
+        recovery_stress =[]
+
 
 
         #split the data using the custom splitting algorithm
@@ -180,9 +205,32 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
         tonic_stress.extend(custom_split( components[1][COGN_START : RELAX_THREE_START], entries_in_segment))
         tonic_non_stress.extend(custom_split( components[1][RELAX_THREE_START : EMOT_START], entries_in_segment))
         tonic_stress.extend(custom_split( components[1][EMOT_START : RELAX_FOUR_START], entries_in_segment))
-        tonic_non_stress.extend(custom_split( components[1][RELAX_FOUR_START : ], entries_in_segment))       
+        tonic_non_stress.extend(custom_split( components[1][RELAX_FOUR_START : ], entries_in_segment))  
 
-        return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
+        peaks_non_stress.extend(custom_split( scr_peaks[RELAX_ONE_START : PHYS_START],entries_in_segment))
+        peaks_non_stress.extend(custom_split( scr_peaks[RELAX_TWO_START : COGN_START],entries_in_segment))
+        peaks_stress.extend(custom_split( scr_peaks[COGN_START : RELAX_THREE_START], entries_in_segment))
+        peaks_non_stress.extend(custom_split( scr_peaks[RELAX_THREE_START : EMOT_START], entries_in_segment))
+        peaks_stress.extend(custom_split( scr_peaks[EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        peaks_non_stress.extend(custom_split( scr_peaks[RELAX_FOUR_START : ], entries_in_segment))  
+
+        onsets_non_stress.extend(custom_split( scr_onsets[RELAX_ONE_START : PHYS_START],entries_in_segment))
+        onsets_non_stress.extend(custom_split( scr_onsets[RELAX_TWO_START : COGN_START],entries_in_segment))
+        onsets_stress.extend(custom_split( scr_onsets[COGN_START : RELAX_THREE_START], entries_in_segment))
+        onsets_non_stress.extend(custom_split( scr_onsets[RELAX_THREE_START : EMOT_START], entries_in_segment))
+        onsets_stress.extend(custom_split( scr_onsets[EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        onsets_non_stress.extend(custom_split( scr_onsets[RELAX_FOUR_START : ], entries_in_segment))  
+
+        recovery_non_stress.extend(custom_split( recovery_time[RELAX_ONE_START : PHYS_START],entries_in_segment))
+        recovery_non_stress.extend(custom_split( recovery_time[RELAX_TWO_START : COGN_START],entries_in_segment))
+        recovery_stress.extend(custom_split( recovery_time[COGN_START : RELAX_THREE_START], entries_in_segment))
+        recovery_non_stress.extend(custom_split( recovery_time[RELAX_THREE_START : EMOT_START], entries_in_segment))
+        recovery_stress.extend(custom_split( recovery_time[EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        recovery_non_stress.extend(custom_split( recovery_time[RELAX_FOUR_START : ], entries_in_segment))  
+
+             
+
+        return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress, onsets_non_stress, onsets_stress, peaks_non_stress, peaks_stress, recovery_non_stress, recovery_stress
 
 def group_one_data(directory:str, channel:list, subject_number:int, segment_length:int, method:str):
         """
@@ -196,19 +244,12 @@ def group_one_data(directory:str, channel:list, subject_number:int, segment_leng
         :param method: The method of component seperation to be used. Has to be "cvxEDA", 
         "smoothmedian', "highpass" or "sparseeda".
 
-        :return non_stress: A 2d numpy array with the non stress signal segments.
-        :return stress: A 2d numpy array with the stress signal segments.
-        :return phasic_non_stress: A 2d numpy array with the phasic component of non stress segments.
-        :return phasic_stress: A 2d numpy array with the the phasic component of stress segments.
-        :return tonic_non_stress: A 2d numpy array with the tonic component of non stress segments.
-        :return tonic_stress: A 2d numpy array with the tonic component of stress segements.
+        For returns see segemnt_signal fucntion description.
         """
 
         #figure out the name of the subject file and extract the data
         record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
-        non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress = segment_signal(record=record_name, channel=channel, 
-                                        segment_length=segment_length, method=method)
-        return non_stress, stress, phasic_non_stress, phasic_stress, tonic_non_stress, tonic_stress
+        return segment_signal(record=record_name, channel=channel, segment_length=segment_length, method=method)
 
 def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int, method:str):
         """
@@ -286,7 +327,13 @@ def get_subject_data(subject_number:int, type:int, segment_number=2048):
         type=2 - phasic non stress segment, 
         type=3 - phasic stress segment, 
         type=4 - tonic non stress segment, 
-        type=5 - tonic stress segment
+        type=5 - tonic stress segment,
+        type=6 - SCR onsets non stress segment,
+        type=7 - SCR onsets stress segment,
+        type=8 - SCR peaks non stress segment,
+        type=9 - SCR peaks stress segment,
+        type=10 - SCR recovery times non stress segment,
+        type=11 - SCR recovery times stress segment
 
         :param subject_number: The number of the subject.
         :param type: The type of the segment, which will be returned. See the function description.
@@ -305,6 +352,8 @@ def scr_peaks(phasic_segment:list, plot=False):
         """
         Finds all local extrema( peaks and throughs) within an array.
         This function can also plot the given segment with the found extrema.
+
+        No longer in use. Use the built-in neurokit eda_peaks function if necessary.
 
         :param phasic_segment: An array with the phasic component of a segment.
         :param plot: A bool, whether to plot the segment or not. Mostly for debugging purposes.
@@ -329,80 +378,37 @@ def scr_peaks(phasic_segment:list, plot=False):
 
         return peaks, troughs
 
-def calculate_scr_features(phasic_segment:list):
+def calculate_scr_features(phasic_segment:list, peaks:list, onsets:list, recovery_times:list ):
         """
         Calculate additional SCR features to form the feature vector. Used for the cvxEDA algorithm
         implementation. 
+
+        Depreciated use the built-in neurokit eda_process function.
 
         For definitions of these features see:
         STRESS DETECTION THROUGH WRIST-BASED ELECTRODERMAL ACTIVITY MONITORING AND MACHINE LEARNING
 
         :param phasic_segment: An array with the phasic component of a segment.
+        :param peaks: A list of indices of found peaks.
+        :param onsets: A list of indices of found onsets.
+        :param recovery_times: A list of recovery times.
 
-        :return scr_amplitudes: A list of all measured amplitudes of the peaks in the segment.
-        :return scr_onsets: A list of all measured onsets in the segment.
-        :return scr_recoveries: A list of all measured recovery times in s.
+        :return scr_onsets: The mean of all SCR onsets in the segment.
+        :return scr_amplitudes: The mean of all SCR amplitudes in the segment.
+        :return scr_recoveries: The mean of all SCR recovery times in the segment.
         """
-
-        peaks, troughs = scr_peaks(phasic_segment)
-        scr_amplitudes = []
+        scr_recoveries = numpy.mean(recovery_times)
         scr_onsets = []
-        scr_recoveries = []
-        current_recovery  = 0 
-        recovery_found = False
-
-        #go through all troughs
-        for i in range(len(troughs)):                
-                if(current_recovery > troughs[i]):
-                        continue
-
-                #go through all peaks
-                current_recovery = 0
-                for j in range(len(peaks)):
-
-                        #ensure non are calculated if there are none
-
-                        if (peaks[j] <= troughs[i]): #peak happened before a trough
-                                continue #check others
-
-                        else: 
-                                current_peak = peaks[j]
-                                current_amplitude = phasic_segment[current_peak] - phasic_segment[troughs[i]]
-                                #search for half recovery
-                                for k in range(current_peak,len(phasic_segment)):
-                                        try:
-                                                if (phasic_segment[k] > phasic_segment[current_peak]):
-                                                        current_peak = k
-                                                if ((phasic_segment[k-1] >= current_amplitude) and (current_amplitude > phasic_segment[k+1])): #here lies the error
-                                                        recovery_found = True
-                                                        current_recovery = k #full recovery happened
-                                                        break
-                                                else: 
-                                                        continue
-                                        except IndexError:
-                                                break
-                                
-                                #calculate all the extracted features
-                                if (recovery_found):
-                                        current_amplitude = phasic_segment[current_peak] - phasic_segment[troughs[i]]
-                                        scr_amplitudes.append(current_amplitude)
-
-                                        current_onset = phasic_segment[troughs[i]]
-                                        scr_onsets.append(current_onset)
-
-                                        recovery= (current_recovery - current_peak)/FS
-                                        scr_recoveries.append(recovery)
-
-                                        current_amplitude = 0
-                                        current_peak = 0
-                                        current_onset = 0
-                                        recovery = 0
-                                        recovery_found = False
-                                        break
+        scr_amplitudes = []
+        for i in range(len(phasic_segment)):
+                if onsets[i] == 1:
+                        scr_onsets.append(phasic_segment[i])
+                if peaks[i] ==1:
+                        scr_amplitudes.append(phasic_segment[i])
         
-        return scr_onsets, scr_amplitudes, scr_recoveries
-                
-def form_feature_vector(segment:list, phasic_segment:list):
+        return numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), scr_recoveries
+
+def form_feature_vector(segment:list, phasic_segment:list, peaks:list, onsets:list, recovery_times:list):
         """
         Forms the Feature vector as seen in the paper.
         The both parameters should correspond to the same segment.
@@ -415,9 +421,8 @@ def form_feature_vector(segment:list, phasic_segment:list):
         :return feature_vector: A feature vector as seen in the paper in the description.
         """
 
-        scr_onsets, scr_amplitudes, scr_recoveries = calculate_scr_features(phasic_segment)
-        return [segment.mean(), numpy.min(segment), numpy.max(segment), segment.std(), numpy.mean(scr_onsets), numpy.mean(scr_amplitudes), numpy.mean(scr_recoveries)]
-
+        scr_onsets, scr_amplitudes, scr_recoveries = calculate_scr_features(phasic_segment, peaks, onsets, recovery_times)
+        return [segment.mean(), numpy.min(segment), numpy.max(segment), segment.std(), scr_onsets, scr_amplitudes, scr_recoveries]
 
 def form_database(directory:str, channel:list, data_count:int, segment_length:int, method:str):
         """
@@ -441,8 +446,9 @@ def form_database(directory:str, channel:list, data_count:int, segment_length:in
                         for l in range(len(subject_data[i][k])): #go through each segment
 
                                 #form the feature vector and it to the dictionary
-                                V = form_feature_vector(get_subject_data(i + 1, k,l + 1), 
-                                    get_subject_data(i + 1, k+2, l + 1)) 
+                                V = form_feature_vector(get_subject_data(i + 1, k,l + 1), get_subject_data(i + 1, k+2, l + 1), 
+                                                        get_subject_data(i + 1, k+6, l + 1), get_subject_data(i + 1, k+8, l + 1), 
+                                                        get_subject_data(i + 1, k+10, l + 1),)
                                 subject = {'subject': i + 1, 'seg_mean': V[0], 
                                    'seg_min': V[1], 'seg_max': V[2], 'seg_std': V[3],
                                    'rc_onsets': V[4], 'rc_amp': V[5], 'rc_rec': V[6], 'stress': k}
@@ -467,9 +473,7 @@ def export_database(file_name:str ,dictionary:list):
                 writer.writeheader()
                 writer.writerows(dictionary)
         return True
-
-
-                
+       
 def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list, title:str):
         """
         Plots a given segment with the phasic components and saves it under a name as a svg file.
@@ -525,16 +529,18 @@ def test_cases():
                         assert(len(k) == 240)
         print("finished grouping by subject")
 
-cvx_segments = group_one_data(directory="data", channel=EDA, subject_number=1, segment_length=30, method="cvxEDA")
-sm_segments = group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30, method="smoothmedian")
-print(sm_segments)
+#cvx_segments = group_one_data(directory="data", channel=EDA, subject_number=1, segment_length=30, method="cvxEDA")
+#sm_segments = group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30, method="smoothmedian")
+
 #test_cases()
-#database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
-#export_database("segments.csv", database)
+
 #download_dataset()
-plot_segment("images/sm_segments.svg", get_subject_data(1,1,1), get_subject_data(1,3,1), get_subject_data(1,5,1),"EDA Signal Decomposition - Nonstress Segment - Smooth Median")
+#plot_segment("images/sm_segments.svg", get_subject_data(1,1,1), get_subject_data(1,3,1), get_subject_data(1,5,1),"EDA Signal Decomposition - Nonstress Segment - Smooth Median")
 #plot_segment("results/non_stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4),"EDA Signal Decomposition - Nonstress Segment")
 #plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4),"EDA Signal Decomposition - Stress Segment") 
 
 #plot_segment("results/non_stress_segment_alt.svg", get_subject_data(1,0,16), get_subject_data(1,2,16), get_subject_data(1,4,16),"EDA Signal Decomposition - Nonstress Segment")
 #plot_segment("results/stress_segment_alt.svg", get_subject_data(1,1,16), get_subject_data(1,3,16), get_subject_data(1,5,16),"EDA Signal Decomposition - Stress Segment") 
+
+#database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30, method="cvxEDA")
+#export_database("segments.csv", database)

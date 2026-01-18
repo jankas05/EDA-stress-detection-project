@@ -61,7 +61,7 @@ def pre_prepare_data(df):
     :return y: panda dataframe with the estimator feature
     """
     #basic preprocessing
-    new_df = df.dropna()
+    new_df = df.fillna(0)
     y = new_df.stress
     X = new_df.drop(columns = ["stress"])
     return new_df,X,y
@@ -306,12 +306,10 @@ def evaluate_component_separation():
     """
     Evaluates component seperation by using models provided by neurokit.
     """
-    #gather_results("cvxEDA")
+    gather_results("cvxEDA")
     gather_results("smoothmedian")
     gather_results("highpass")
-    gather_results("sparseeda")
     return True
-
 
 def plot_correlation(X,y,name):
     """
@@ -372,8 +370,6 @@ def plot_confusion_matrix(model, X_test, y_test, name):
     fig.savefig(name, dpi=300, format="svg", bbox_inches="tight")
     return True
 
-df = pd.read_csv("segments.csv")
-df_results = pd.read_csv("results/results.csv")
 
 #for data vizualisation
 #new_df, X, y = pre_prepare_data(df)
