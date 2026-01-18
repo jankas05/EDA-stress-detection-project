@@ -99,14 +99,14 @@ def components_separation(signal:list, method:str,fs=8):
         
         :param segment: A numpy array with the EDA signal.
         :param method: The method of component seperation to be used. Has to be "cvxEDA", 
-        "smoothmedian', "highpass" or "sparseeda".
+        "smoothmedian', "highpass".
         :param fs: The sampling frequency of the signal. Defaults to 8Hz.
 
         :return list: Array of the phasic and tonic component.
         """
 
         #normalize and separate the components
-        if method not in ["cvxEDA", "smoothmedian", "highpass", "sparseeda"]: raise ValueError("Method not recognized")
+        if method not in ["cvxEDA", "smoothmedian", "highpass"]: raise ValueError("Method not recognized")
         signals, info = nk.eda_process(zscore(signal.ravel()), fs, method="neurokit", method_phasic=method, method_cleaning="neurokit", method_peaks="neurokit")
         components = []
         
@@ -130,7 +130,7 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
         :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
         :param segment_length: The length of each segment in seconds.
         :param method: The method of component seperation to be used. Has to be "cvxEDA", 
-        "smoothmedian', "highpass" or "sparseeda".
+        "smoothmedian', "highpass".
 
         :return non_stress: A 2d numpy array with the non stress signal segments.
         :return stress: A 2d numpy array with the stress signal segments.
@@ -242,7 +242,7 @@ def group_one_data(directory:str, channel:list, subject_number:int, segment_leng
         :param subject_number: The number of the subject. In the case of the UTD dataset can be a number between 1 and 20.
         :param segment_length: The length of each segment in seconds.
         :param method: The method of component seperation to be used. Has to be "cvxEDA", 
-        "smoothmedian', "highpass" or "sparseeda".
+        "smoothmedian', "highpass".
 
         For returns see segemnt_signal fucntion description.
         """
@@ -266,7 +266,7 @@ def group_all_data_by_segments(directory:str, channel:list, data_count:int, segm
         :param data_count: The number of subjects. 
         :param segment_length: The length of each segment in seconds.
         :param method: The method of component seperation to be used. Has to be "cvxEDA", 
-        "smoothmedian', "highpass" or "sparseeda".
+        "smoothmedian', "highpass".
 
         returns:
         None
@@ -433,6 +433,7 @@ def form_database(directory:str, channel:list, data_count:int, segment_length:in
         :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
         :param data_count: The number of subjects. 
         :param segment_length: The length of each segment in seconds.
+        :param method: The method of component seperation to be used. Has to be "cvxEDA", "smoothmedian', "highpass".
 
         :return database: A database array with dictionaries as entries. See description above the 
         """
