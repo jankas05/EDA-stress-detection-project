@@ -5,7 +5,6 @@ from yellowbrick.features import (Rank2D, RadViz)
 from yellowbrick.classifier import ConfusionMatrix
 import matplotlib.pyplot as plt
 import sklearn.model_selection as ms
-import numpy as np
 from math import ceil
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
@@ -13,8 +12,10 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (accuracy_score, recall_score, precision_score, f1_score)
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
 
-def get_database(method):
+def get_database(method:str):
     """
     Forms the database and exports it into a .csv file. Uses the default settings.
 
@@ -32,7 +33,7 @@ def get_database(method):
     
     return True
 
-def create_profile(df):
+def create_profile(df:pd.DataFrame):
     """
     Creates a panda profile with correlation and missing data statistics.
     The profile is then exported as a HTML file to be conveniently read
@@ -50,23 +51,36 @@ def create_profile(df):
 
     return True
 
-def pre_prepare_data(df):
+def pre_prepare_data(df:pd.DataFrame, nan_handling:str="zeroes"):
     """
     Basic preprocessing of the data. Drop all NaN rows and separates the features.
     
     :param df: panda dataframe containing all data
+    :param nan_handling: Method to handle NaN values. Can be either "none", "zeroes", "iterative_imputing", "mean".
 
     :return new_df: new panda dataframe without NaN rows
     :return X: panda dataframe with features
     :return y: panda dataframe with the estimator feature
     """
     #basic preprocessing
-    new_df = df.fillna(0)
+    match nan_handling:
+        case "none":
+            new_df = df.dropna()
+        case "zeroes": 
+            new_df = df.fillna(0)
+        case "iterative_imputing":
+            imputer = IterativeImputer(random_state=42)
+            new_df = pd.DataFrame(imputer.fit_transform(df), columns=df.columns, index=df.index)
+        case "mean":
+            new_df = df.fillna(df.median())
+        case _:
+            raise ValueError("nan_handling has to be either 'drop', 'zeroes', 'iterative_imputing' or 'mean'")
+    
     y = new_df.stress
     X = new_df.drop(columns = ["stress"])
     return new_df,X,y
 
-def prepare_data(df, random_state):
+def prepare_data(df:pd.DataFrame, random_state:int, nan_handling:str="zeroes"):
     """
     Prepares the data for classification. Drops all NaN rows, separates the 
     infodata and the estimator feature.
@@ -82,7 +96,7 @@ def prepare_data(df, random_state):
     """
 
     #basic preprocessing
-    new_df,X,y = pre_prepare_data(df)
+    new_df,X,y = pre_prepare_data(df, nan_handling)
 
     #split the dataset into training and testing sets
     groups = new_df.subject
@@ -106,7 +120,7 @@ def prepare_data(df, random_state):
 
     return X_train, y_train, X_test, y_test, groups
 
-def train_model(X_train, y_train, groups, model_select, random_state ):
+def train_model(X_train:pd.DataFrame, y_train:pd.DataFrame, groups:list, model_select:str, random_state:int ):
     """
     Train a model on a training set and validate it. The specifing model can be 
     set using the model_select variable. Cross-validation will be based upon a 
@@ -204,7 +218,7 @@ def train_model(X_train, y_train, groups, model_select, random_state ):
     print("Postfitting Scores:", postfitting_scores)
     return best_model
 
-def evaluate_model(model, X_test, y_test):
+def evaluate_model(model:str, X_test:pd.DataFrame, y_test:pd.DataFrame):
     """
     Docstring for evaluate_model
     
@@ -225,7 +239,7 @@ def evaluate_model(model, X_test, y_test):
 
     return accuracy, recall, precision, f1
 
-def form_evaluation_entry(X_train, y_train, X_test, y_test, groups, model_select, random_state):
+def form_evaluation_entry(X_train:pd.DataFrame, y_train:pd.DataFrame, X_test:pd.DataFrame, y_test:pd.DataFrame, groups:list, model_select:str, random_state:int):
     """
     Forms a dictionary with the model, random_state and all relevant evaluation metrics.
     
@@ -245,7 +259,7 @@ def form_evaluation_entry(X_train, y_train, X_test, y_test, groups, model_select
     evaluation = {"model": model_select, "random_state": random_state, "accuracy": v[0], "recall": v[1], "precision": v[2], "f1_score": v[3]}
     return evaluation
 
-def gather_evaluation_metrics(df, random_state, repetitions):
+def gather_evaluation_metrics(df:pd.DataFrame, random_state:int, repetitions:int, nan_handling:str="zeroes"):
     """
     Runs multiple evaluations of all models with different data splits each time and writes the results  
     into an array of dictionaries.
@@ -256,7 +270,7 @@ def gather_evaluation_metrics(df, random_state, repetitions):
     """
     evaluation_database =[]
     for i in range(repetitions):
-        kwargs = prepare_data(df, random_state+i)
+        kwargs = prepare_data(df, random_state+i, nan_handling)
         evaluation_database.append(form_evaluation_entry(*kwargs,"knn", random_state+i))
         evaluation_database.append(form_evaluation_entry(*kwargs,"svm", random_state+i))
         evaluation_database.append(form_evaluation_entry(*kwargs,"nb", random_state+i))
@@ -264,7 +278,7 @@ def gather_evaluation_metrics(df, random_state, repetitions):
         evaluation_database.append(form_evaluation_entry(*kwargs,"rf", random_state+i))
     return evaluation_database
 
-def save_evaluation_database(evaluation_database, name):
+def save_evaluation_database(evaluation_database:list, name:str):
     """
     Saves the evaluation database as a .csv file.
 
@@ -275,7 +289,7 @@ def save_evaluation_database(evaluation_database, name):
     df.to_csv(name, index=False)
     return True
 
-def gather_results(method:str):
+def gather_results(method:str, nan_handling:str="zeroes"):
     """
     Gathers results by using machine learning to predict stress with the help of a 
     specified component seperation method.
@@ -288,17 +302,17 @@ def gather_results(method:str):
     df = pd.read_csv(method + "_segments.csv")
 
     #evaluate machine learning models
-    save_evaluation_database(gather_evaluation_metrics(df, 42, 10),"results/model_evaluation/"+ method + "_results.csv")
+    save_evaluation_database(gather_evaluation_metrics(df, 42, 10, nan_handling),"results/"+ nan_handling + "_filling/" + "model_evaluation/" + method + "_results.csv")
 
     #get averages and save them
-    df_results=pd.read_csv("results/model_evaluation/"+ method + "_results.csv")
+    df_results=pd.read_csv("results/"+ nan_handling + "_filling/" + "model_evaluation/" + method + "_results.csv")
     df_mean = df_results.groupby("model", as_index=False)[["accuracy","recall","precision", "f1_score"]].mean()
-    df_mean.to_csv("results/model_evaluation/mean_"+ method + "_results.csv", index=False)
+    df_mean.to_csv("results/"+ nan_handling + "_filling/" + "model_evaluation/mean_" + method + "_results.csv", index=False)
 
     #plot a boxplot to show the results
     fig, ax = plt.subplots(figsize=(12,6))
     df_results.boxplot(by='model', column=["accuracy"],ax=ax)
-    fig.savefig("results/" + method + "_boxplot.svg", dpi=300, format="svg", bbox_inches="tight")
+    fig.savefig("results/" + nan_handling + "_filling/"+ method + "_boxplot.svg", dpi=300, format="svg", bbox_inches="tight")
 
     return True
 
@@ -306,9 +320,25 @@ def evaluate_component_separation():
     """
     Evaluates component seperation by using models provided by neurokit.
     """
-    gather_results("cvxEDA")
-    gather_results("smoothmedian")
-    gather_results("highpass")
+    #zero filling for NaN values
+    gather_results("cvxEDA", nan_handling="zeroes")
+    gather_results("smoothmedian", nan_handling="zeroes")
+    gather_results("highpass", nan_handling="zeroes")
+
+    #iterative imputing for NaN values
+    gather_results("cvxEDA", nan_handling="iterative_imputing")
+    gather_results("smoothmedian", nan_handling="iterative_imputing")
+    gather_results("highpass", nan_handling="iterative_imputing")
+
+    #averages for NaN values
+    gather_results("cvxEDA", nan_handling="mean")
+    gather_results("smoothmedian", nan_handling="mean")
+    gather_results("highpass", nan_handling="mean")
+
+    #dropping all NaN values
+    gather_results("cvxEDA", nan_handling="none")
+    gather_results("smoothmedian", nan_handling="none")
+    gather_results("highpass", nan_handling="none")
     return True
 
 def plot_correlation(X,y,name):
