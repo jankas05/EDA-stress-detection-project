@@ -306,7 +306,7 @@ def evaluate_component_separation():
     """
     Evaluates component seperation by using models provided by neurokit.
     """
-    gather_results("cvxEDA")
+    #gather_results("cvxEDA")
     gather_results("smoothmedian")
     gather_results("highpass")
     gather_results("sparseeda")

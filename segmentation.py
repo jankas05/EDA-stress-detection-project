@@ -87,21 +87,24 @@ def components_separation(signal:list, method:str,fs=8):
         """
 
         #normalize and separate the components
-        cleaned_signal = nk.eda_clean(signal)
-        normed_signal = zscore(cleaned_signal, fs)
+        normed_signal = zscore(signal)
+        components = []
         match method:
                 case "cvxEDA":
                         [r, p, t, l, d, e, obj] = cvxEDA(normed_signal, 1./fs)
                         components = [r,t]
                 case "smoothmedian":
                         df_components = nk.eda_phasic(normed_signal, fs, method=method)
-                        components = df_components.to_numpy()
+                        components.append(df_components["EDA_Tonic"].to_numpy())
+                        components.append(df_components["EDA_Phasic"].to_numpy())
                 case "highpass":
                         df_components = nk.eda_phasic(normed_signal, fs, method=method)
-                        components = df_components.to_numpy()
+                        components.append(df_components["EDA_Tonic"].to_numpy())
+                        components.append(df_components["EDA_Phasic"].to_numpy())
                 case "sparseeda":
                         df_components = nk.eda_phasic(normed_signal, fs, method=method)
-                        components = df_components.to_numpy()
+                        components.append(df_components["EDA_Tonic"].to_numpy())
+                        components.append(df_components["EDA_Phasic"].to_numpy())
                 case "_":
                         return False
         return components
@@ -116,6 +119,8 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
         :param record: A WFDB data file with the signal.
         :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
         :param segment_length: The length of each segment in seconds.
+        :param method: The method of component seperation to be used. Has to be "cvxEDA", 
+        "smoothmedian', "highpass" or "sparseeda".
 
         :return non_stress: A 2d numpy array with the non stress signal segments.
         :return stress: A 2d numpy array with the stress signal segments.
@@ -130,6 +135,7 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
         annotation_points = extract_annotation(record=record,extension="atr")
         sampling_frequency = signal_data["fs"]
         signal_length = signal_data["sig_len"]
+        cleaned_signal = nk.eda_clean(signal, sampling_frequency)
 
         #annotation constants for easier readability
         RELAX_ONE_START = annotation_points[0]
@@ -142,7 +148,7 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
 
         #calculate the length of each segment
         entries_in_segment = int(sampling_frequency * segment_length)
-        components = components_separation(signal, method)
+        components = components_separation(cleaned_signal, method)
 
 
         #initialize the arrays for the segments
@@ -155,12 +161,12 @@ def segment_signal(record:str,channel:list, segment_length:int, method:str):
 
 
         #split the data using the custom splitting algorithm
-        non_stress.extend(custom_split( signal[RELAX_ONE_START : PHYS_START],entries_in_segment))
-        non_stress.extend(custom_split( signal[RELAX_TWO_START : COGN_START],entries_in_segment))
-        stress.extend(custom_split( signal[COGN_START : RELAX_THREE_START], entries_in_segment))
-        non_stress.extend(custom_split( signal[RELAX_THREE_START : EMOT_START], entries_in_segment))
-        stress.extend(custom_split( signal[EMOT_START : RELAX_FOUR_START], entries_in_segment))
-        non_stress.extend(custom_split( signal[RELAX_FOUR_START : ], entries_in_segment))
+        non_stress.extend(custom_split( cleaned_signal[RELAX_ONE_START : PHYS_START],entries_in_segment))
+        non_stress.extend(custom_split( cleaned_signal[RELAX_TWO_START : COGN_START],entries_in_segment))
+        stress.extend(custom_split( cleaned_signal[COGN_START : RELAX_THREE_START], entries_in_segment))
+        non_stress.extend(custom_split( cleaned_signal[RELAX_THREE_START : EMOT_START], entries_in_segment))
+        stress.extend(custom_split( cleaned_signal[EMOT_START : RELAX_FOUR_START], entries_in_segment))
+        non_stress.extend(custom_split( cleaned_signal[RELAX_FOUR_START : ], entries_in_segment))
 
         phasic_non_stress.extend(custom_split( components[0][RELAX_ONE_START : PHYS_START],entries_in_segment))
         phasic_non_stress.extend(custom_split( components[0][RELAX_TWO_START : COGN_START],entries_in_segment))
@@ -187,6 +193,8 @@ def group_one_data(directory:str, channel:list, subject_number:int, segment_leng
         :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
         :param subject_number: The number of the subject. In the case of the UTD dataset can be a number between 1 and 20.
         :param segment_length: The length of each segment in seconds.
+        :param method: The method of component seperation to be used. Has to be "cvxEDA", 
+        "smoothmedian', "highpass" or "sparseeda".
 
         :return non_stress: A 2d numpy array with the non stress signal segments.
         :return stress: A 2d numpy array with the stress signal segments.
@@ -216,6 +224,8 @@ def group_all_data_by_segments(directory:str, channel:list, data_count:int, segm
         :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
         :param data_count: The number of subjects. 
         :param segment_length: The length of each segment in seconds.
+        :param method: The method of component seperation to be used. Has to be "cvxEDA", 
+        "smoothmedian', "highpass" or "sparseeda".
 
         returns:
         None
@@ -233,7 +243,7 @@ def group_all_data_by_segments(directory:str, channel:list, data_count:int, segm
                 non_stress_segments.extend(temp_non_stress)
                 stress_segments.extend(temp_stress)
 
-def group_all_data_by_subject(directory:str, channel:list, data_count:int, segment_length:int):
+def group_all_data_by_subject(directory:str, channel:list, data_count:int, segment_length:int, method:str):
         """
         Groups all data by subject into stress and non stress segments
 
@@ -244,6 +254,8 @@ def group_all_data_by_subject(directory:str, channel:list, data_count:int, segme
         :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
         :param data_count: The number of subjects. 
         :param segment_length: The length of each segment in seconds.
+        :param method: The method of component seperation to be used. Has to be "cvxEDA", 
+        "smoothmedian', "highpass" or "sparseeda".
 
         returns:
         None
@@ -256,7 +268,7 @@ def group_all_data_by_subject(directory:str, channel:list, data_count:int, segme
 
         #go through the subject data and group it into stress and non stress by subject
         for i in range(data_count):
-               temp_subject = group_one_data(directory, channel, i+1, segment_length)
+               temp_subject = group_one_data(directory, channel, i+1, segment_length, method)
                subject_data.append(temp_subject)
 
 def get_subject_data(subject_number:int, type:int, segment_number=2048):
@@ -513,10 +525,14 @@ def test_cases():
                         assert(len(k) == 240)
         print("finished grouping by subject")
 
+cvx_segments = group_one_data(directory="data", channel=EDA, subject_number=1, segment_length=30, method="cvxEDA")
+sm_segments = group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30, method="smoothmedian")
+print(sm_segments)
 #test_cases()
 #database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30)
 #export_database("segments.csv", database)
 #download_dataset()
+plot_segment("images/sm_segments.svg", get_subject_data(1,1,1), get_subject_data(1,3,1), get_subject_data(1,5,1),"EDA Signal Decomposition - Nonstress Segment - Smooth Median")
 #plot_segment("results/non_stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4),"EDA Signal Decomposition - Nonstress Segment")
 #plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4),"EDA Signal Decomposition - Stress Segment") 
 
