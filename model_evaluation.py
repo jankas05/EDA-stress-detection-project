@@ -56,29 +56,30 @@ def pre_prepare_data(df:pd.DataFrame, nan_handling:str="zeroes"):
     Basic preprocessing of the data. Drop all NaN rows and separates the features.
     
     :param df: panda dataframe containing all data
-    :param nan_handling: Method to handle NaN values. Can be either "none", "zeroes", "iterative_imputing", "mean".
+    :param nan_handling: Method to handle NaN values. Can be either "none", "zeroes", "iterative_imputing", "median".
 
-    :return new_df: new panda dataframe without NaN rows
-    :return X: panda dataframe with features
+    :return new_X: New panda dataframe without NaN rows with features
     :return y: panda dataframe with the estimator feature
     """
     #basic preprocessing
+    y = df.stress
+    X = df.drop(columns = ["stress"])
     match nan_handling:
         case "none":
             new_df = df.dropna()
+            y = new_df.stress
+            new_X = new_df.drop(columns = ["stress"])
         case "zeroes": 
-            new_df = df.fillna(0)
+            new_X = X.fillna(0)
         case "iterative_imputing":
             imputer = IterativeImputer(random_state=42)
-            new_df = pd.DataFrame(imputer.fit_transform(df), columns=df.columns, index=df.index)
-        case "mean":
-            new_df = df.fillna(df.median())
+            new_X = pd.DataFrame(imputer.fit_transform(X), columns=X.columns, index=X.index)
+        case "median":
+            new_X = X.fillna(df.median())
         case _:
-            raise ValueError("nan_handling has to be either 'drop', 'zeroes', 'iterative_imputing' or 'mean'")
+            raise ValueError("nan_handling has to be either 'drop', 'zeroes', 'iterative_imputing' or 'median'")
     
-    y = new_df.stress
-    X = new_df.drop(columns = ["stress"])
-    return new_df,X,y
+    return new_X, y
 
 def prepare_data(df:pd.DataFrame, random_state:int, nan_handling:str="zeroes"):
     """
@@ -96,11 +97,11 @@ def prepare_data(df:pd.DataFrame, random_state:int, nan_handling:str="zeroes"):
     """
 
     #basic preprocessing
-    new_df,X,y = pre_prepare_data(df, nan_handling)
+    X,y = pre_prepare_data(df, nan_handling)
 
     #split the dataset into training and testing sets
-    groups = new_df.subject
-    number_of_subjects = new_df.subject.unique()
+    groups = X.subject
+    number_of_subjects = X.subject.unique()
     train_size = (len(number_of_subjects) - ceil(0.1 * len(number_of_subjects))) / len(number_of_subjects)
     gss = ms.GroupShuffleSplit(n_splits=1, train_size=train_size , random_state=random_state)
     train_idx, test_idx = next(gss.split(X,y, groups=groups))
@@ -321,19 +322,19 @@ def evaluate_component_separation():
     Evaluates component seperation by using models provided by neurokit.
     """
     #zero filling for NaN values
-    gather_results("cvxEDA", nan_handling="zeroes")
-    gather_results("smoothmedian", nan_handling="zeroes")
-    gather_results("highpass", nan_handling="zeroes")
+    #gather_results("cvxEDA", nan_handling="zeroes")
+    #gather_results("smoothmedian", nan_handling="zeroes")
+    #gather_results("highpass", nan_handling="zeroes")
 
     #iterative imputing for NaN values
-    gather_results("cvxEDA", nan_handling="iterative_imputing")
-    gather_results("smoothmedian", nan_handling="iterative_imputing")
-    gather_results("highpass", nan_handling="iterative_imputing")
+    #gather_results("cvxEDA", nan_handling="iterative_imputing")
+    #gather_results("smoothmedian", nan_handling="iterative_imputing")
+    #gather_results("highpass", nan_handling="iterative_imputing")
 
     #averages for NaN values
-    gather_results("cvxEDA", nan_handling="mean")
-    gather_results("smoothmedian", nan_handling="mean")
-    gather_results("highpass", nan_handling="mean")
+    #gather_results("cvxEDA", nan_handling="median")
+    #gather_results("smoothmedian", nan_handling="median")
+    #gather_results("highpass", nan_handling="median")
 
     #dropping all NaN values
     gather_results("cvxEDA", nan_handling="none")
