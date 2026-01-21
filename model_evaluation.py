@@ -322,19 +322,19 @@ def evaluate_component_separation():
     Evaluates component seperation by using models provided by neurokit.
     """
     #zero filling for NaN values
-    #gather_results("cvxEDA", nan_handling="zeroes")
-    #gather_results("smoothmedian", nan_handling="zeroes")
-    #gather_results("highpass", nan_handling="zeroes")
+    gather_results("cvxEDA", nan_handling="zeroes")
+    gather_results("smoothmedian", nan_handling="zeroes")
+    gather_results("highpass", nan_handling="zeroes")
 
     #iterative imputing for NaN values
-    #gather_results("cvxEDA", nan_handling="iterative_imputing")
-    #gather_results("smoothmedian", nan_handling="iterative_imputing")
-    #gather_results("highpass", nan_handling="iterative_imputing")
+    gather_results("cvxEDA", nan_handling="iterative_imputing")
+    gather_results("smoothmedian", nan_handling="iterative_imputing")
+    gather_results("highpass", nan_handling="iterative_imputing")
 
     #averages for NaN values
-    #gather_results("cvxEDA", nan_handling="median")
-    #gather_results("smoothmedian", nan_handling="median")
-    #gather_results("highpass", nan_handling="median")
+    gather_results("cvxEDA", nan_handling="median")
+    gather_results("smoothmedian", nan_handling="median")
+    gather_results("highpass", nan_handling="median")
 
     #dropping all NaN values
     gather_results("cvxEDA", nan_handling="none")

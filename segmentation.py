@@ -251,39 +251,6 @@ def group_one_data(directory:str, channel:list, subject_number:int, segment_leng
         record_name = directory + "/Subject" + str(subject_number) +"_AccTempEDA"
         return segment_signal(record=record_name, channel=channel, segment_length=segment_length, method=method)
 
-def group_all_data_by_segments(directory:str, channel:list, data_count:int, segment_length:int, method:str):
-        """
-        Groups all subject data, counting from the first to the data_count subject, into stress and non stress segments. 
-        The data is grouped into these two categories, therefore it cannot be traced
-        to a certain subject. 
-        Defines two global arrays stress_segments and non_stress_segments, through which 
-        data can be accessed. 
-
-        Depreciated and not used in the project.
-
-        :param directory: The directory in which the subject data is stored.
-        :param channel: The channels which are to be considered. This attempt focuses on EDA, but there are more signals.
-        :param data_count: The number of subjects. 
-        :param segment_length: The length of each segment in seconds.
-        :param method: The method of component seperation to be used. Has to be "cvxEDA", 
-        "smoothmedian', "highpass".
-
-        returns:
-        None
-        """
-
-        #declare needed arrays
-        global stress_segments
-        global non_stress_segments
-        stress_segments = []
-        non_stress_segments = []
-
-        #go through the subject data and group it into the stress and non stress categories
-        for i in range(data_count):
-                temp_stress, temp_non_stress, _ ,_ = group_one_data(directory, channel, i+1, segment_length, method)
-                non_stress_segments.extend(temp_non_stress)
-                stress_segments.extend(temp_stress)
-
 def group_all_data_by_subject(directory:str, channel:list, data_count:int, segment_length:int, method:str):
         """
         Groups all data by subject into stress and non stress segments
@@ -347,36 +314,6 @@ def get_subject_data(subject_number:int, type:int, segment_number=2048):
                 return subject_data[subject_number - 1][type][segment_number-1]
         except IndexError:
                 return subject_data[subject_number - 1][type]
-
-def scr_peaks(phasic_segment:list, plot=False):
-        """
-        Finds all local extrema( peaks and throughs) within an array.
-        This function can also plot the given segment with the found extrema.
-
-        No longer in use. Use the built-in neurokit eda_peaks function if necessary.
-
-        :param phasic_segment: An array with the phasic component of a segment.
-        :param plot: A bool, whether to plot the segment or not. Mostly for debugging purposes.
-        Defaults to false.
-
-        returns:
-        :return peaks: A list of indices of found peaks.
-        :return troughs:  A list of indices of found troughs.
-        """
-
-        #find peaks and troughs
-        peaks, _ = find_peaks(phasic_segment)
-        troughs, _ =find_peaks(-phasic_segment)
-
-        #plot if needed
-        if(plot):
-                tm = pl.arange(1., len(phasic_segment)+1.)/8
-                pl.plot(tm,phasic_segment)
-                pl.plot(tm[peaks],phasic_segment[peaks],"x")
-                pl.plot(tm[troughs],phasic_segment[troughs],"o")
-                pl.show()
-
-        return peaks, troughs
 
 def calculate_scr_features(phasic_segment:list, peaks:list, onsets:list, recovery_times:list ):
         """
@@ -502,33 +439,6 @@ def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list,
         
 
         return True
-
-def test_cases():
-        #test for grouping data by segments
-        group_all_data_by_segments(directory="data", channel=EDA, data_count=20, segment_length=30)
-        a = len(stress_segments)
-        b = len(non_stress_segments)
-        print(a)
-        print(b)
-        print(a+b)
-
-        for i in range(a):
-                assert(len(stress_segments[i]) == 240)
-        for i in range(b):
-                assert(len(non_stress_segments[i]) == 240)
-        print("finished grouping by segments")
-
-        #test for grouping data by subject
-        group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30)
-        c = len(subject_data)
-        print(c)
-        assert(c==20)
-        for i in range(20):
-                for j in get_subject_data(i + 1,True):
-                        assert(len(j) == 240)
-                for k in get_subject_data(i + 1,False):
-                        assert(len(k) == 240)
-        print("finished grouping by subject")
 
 #cvx_segments = group_one_data(directory="data", channel=EDA, subject_number=1, segment_length=30, method="cvxEDA")
 #sm_segments = group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30, method="smoothmedian")
