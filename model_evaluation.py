@@ -400,23 +400,3 @@ def plot_confusion_matrix(model, X_test, y_test, name):
     cm_viz.show()
     fig.savefig(name, dpi=300, format="svg", bbox_inches="tight")
     return True
-
-
-#for data vizualisation
-#new_df, X, y = pre_prepare_data(df)
-#plot_radviz(X, y, "results/radviz.svg")
-#plot_correlation(X.drop(columns=["subject"]),y,"results/correlation.svg")
-#create_profile(X)
-#plot_confusion_matrix(best_model, X_test, y_test, "results/confusion_matrix.svg")
-
-#paper results
-#gather_results("cvxEDA")
-
-#component seperation results
-evaluate_component_separation()
-
-
-
-
-    
-

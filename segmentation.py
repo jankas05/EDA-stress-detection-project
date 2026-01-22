@@ -2,8 +2,7 @@ import wfdb
 import numpy
 import numpy._core.numeric as _nx
 from cvxEDA.src.cvxEDA import cvxEDA
-import pylab as pl
-from scipy.signal import find_peaks
+import matplotlib.pyplot as pl
 from scipy.stats import zscore
 import csv
 import neurokit2 as nk
@@ -372,6 +371,9 @@ def form_database(directory:str, channel:list, data_count:int, segment_length:in
         :param segment_length: The length of each segment in seconds.
         :param method: The method of component seperation to be used. Has to be "cvxEDA", "smoothmedian', "highpass".
 
+        Example:
+        database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30, method="cvxEDA")
+
         :return database: A database array with dictionaries as entries. See description above the 
         """
         #segment the data, group it and store it into an global array
@@ -400,6 +402,7 @@ def export_database(file_name:str ,dictionary:list):
 
         :param file_name: The name under which the dictionary will be saved.
         :param dictionary: The dictionarz which will be exported as a csv file.
+        
 
         returns:
         A csv file with all relevant infomation in the current directory.
@@ -421,6 +424,14 @@ def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list,
         :param phasic_segment: A numpy array with the phasic component of a segment. 
         :param tonic_segment: A numpy array with the tonic component of a segment. 
         :param title: The title of the plot.
+        
+        Examples:
+        plot_segment("images/sm_segments.svg", get_subject_data(1,1,1), get_subject_data(1,3,1), get_subject_data(1,5,1),"EDA Signal Decomposition - Nonstress Segment - Smooth Median")
+        plot_segment("results/non_stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4),"EDA Signal Decomposition - Nonstress Segment")
+        plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4),"EDA Signal Decomposition - Stress Segment") 
+
+        plot_segment("results/non_stress_segment_alt.svg", get_subject_data(1,0,16), get_subject_data(1,2,16), get_subject_data(1,4,16),"EDA Signal Decomposition - Nonstress Segment")
+        plot_segment("results/stress_segment_alt.svg", get_subject_data(1,1,16), get_subject_data(1,3,16), get_subject_data(1,5,16),"EDA Signal Decomposition - Stress Segment") 
 
         returns:
         A visual representation of the segment and a svg file with the representation.
@@ -439,19 +450,3 @@ def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list,
         
 
         return True
-
-#cvx_segments = group_one_data(directory="data", channel=EDA, subject_number=1, segment_length=30, method="cvxEDA")
-#sm_segments = group_all_data_by_subject(directory="data", channel=EDA, data_count=20, segment_length=30, method="smoothmedian")
-
-#test_cases()
-
-#download_dataset()
-#plot_segment("images/sm_segments.svg", get_subject_data(1,1,1), get_subject_data(1,3,1), get_subject_data(1,5,1),"EDA Signal Decomposition - Nonstress Segment - Smooth Median")
-#plot_segment("results/non_stress_segment.svg", get_subject_data(1,0,4), get_subject_data(1,2,4), get_subject_data(1,4,4),"EDA Signal Decomposition - Nonstress Segment")
-#plot_segment("results/stress_segment.svg", get_subject_data(1,1,4), get_subject_data(1,3,4), get_subject_data(1,5,4),"EDA Signal Decomposition - Stress Segment") 
-
-#plot_segment("results/non_stress_segment_alt.svg", get_subject_data(1,0,16), get_subject_data(1,2,16), get_subject_data(1,4,16),"EDA Signal Decomposition - Nonstress Segment")
-#plot_segment("results/stress_segment_alt.svg", get_subject_data(1,1,16), get_subject_data(1,3,16), get_subject_data(1,5,16),"EDA Signal Decomposition - Stress Segment") 
-
-#database = form_database(directory="data", channel=EDA, data_count=20, segment_length=30, method="cvxEDA")
-#export_database("segments.csv", database)
