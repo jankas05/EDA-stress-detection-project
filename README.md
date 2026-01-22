@@ -26,7 +26,7 @@ In addition to replication, the project evaluates:
    python main.py
    ```
 4. Or look at the results in `results/`
-   - Newly generated results will replace the old results in the same
+   - Newly generated results will replace the old results 
 
 ---
 
