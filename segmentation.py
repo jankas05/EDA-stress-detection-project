@@ -101,7 +101,11 @@ def components_separation(signal:list, method:str,fs=8):
         "smoothmedian', "highpass".
         :param fs: The sampling frequency of the signal. Defaults to 8Hz.
 
-        :return list: Array of the phasic and tonic component.
+        :return components: Array of the phasic and tonic component.
+        :return cleaned_signal: The cleaned EDA signal.
+        :return scr_peaks: The detected SCR peaks.
+        :return scr_onsets: The detected SCR onsets.
+        :return recovery_time: The recovery times of the SCRs.
         """
 
         #normalize and separate the components
@@ -116,6 +120,7 @@ def components_separation(signal:list, method:str,fs=8):
         scr_peaks = signals["SCR_Peaks"].to_numpy()
         scr_onsets = signals["SCR_Onsets"].to_numpy()
         recovery_time = signals["SCR_RiseTime"].to_numpy()
+
 
         return components, cleaned_signal, scr_peaks, scr_onsets, recovery_time
 
@@ -415,7 +420,7 @@ def export_database(file_name:str ,dictionary:list):
                 writer.writerows(dictionary)
         return True
        
-def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list, title:str):
+def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list, title:str, fs=8):
         """
         Plots a given segment with the phasic components and saves it under a name as a svg file.
 
@@ -436,7 +441,7 @@ def plot_segment(name:str,segment:list, phasic_segment:list, tonic_segment:list,
         returns:
         A visual representation of the segment and a svg file with the representation.
         """
-        tm = pl.arange(1., len(segment)+1.) / 8
+        tm = numpy.arange(0, len(segment)) /fs
         pl.plot(tm, segment, color='k', label="Segment") #black
         pl.plot(tm, phasic_segment, color='r', label="Phasic component") #red
         pl.plot(tm, tonic_segment, color='b', label="Tonic component") #blue
