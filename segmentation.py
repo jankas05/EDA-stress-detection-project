@@ -1,7 +1,6 @@
 import wfdb
 import numpy
 import numpy._core.numeric as _nx
-from cvxEDA.src.cvxEDA import cvxEDA
 import matplotlib.pyplot as pl
 from scipy.stats import zscore
 import csv
