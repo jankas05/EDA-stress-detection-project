@@ -18,7 +18,7 @@ import pandas as pd
 #me.create_profile(X)
 
 #paper results
-#me.gather_results("cvxEDA")
+#me.gather_results("cvxEDA", nan_handling="zeroes")
 
 #component seperation results
 #me.evaluate_component_separation()

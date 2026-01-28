@@ -201,7 +201,7 @@ def train_model(X_train:pd.DataFrame, y_train:pd.DataFrame, groups:list, model_s
             model = RandomForestClassifier(random_state=random_state)
         
         case _: #wrong model selected
-            return False 
+            raise ValueError("model_select has to be either 'knn', 'svm', 'nb', 'lr' or 'rf'")
         
     #calculate prefitting scores, perform a randomized search; change the n_iter parameter if needed
     print("Training", model_select)
@@ -217,7 +217,10 @@ def train_model(X_train:pd.DataFrame, y_train:pd.DataFrame, groups:list, model_s
     best_model.fit(X_train, y_train)
     postfitting_scores = ms.cross_val_score(best_model, X_train, y_train, groups=groups, cv=gss)
     print("Postfitting Scores:", postfitting_scores)
-    return best_model
+    if min(postfitting_scores) < min(prefitting_scores):
+        return model.fit(X_train, y_train)
+    else:
+        return best_model
 
 def evaluate_model(model:str, X_test:pd.DataFrame, y_test:pd.DataFrame):
     """
