@@ -77,7 +77,7 @@ def pre_prepare_data(df:pd.DataFrame, nan_handling:str="zeroes"):
                 X = df.drop(columns = ["stress"])
                 imputer = IterativeImputer(random_state=42)
                 X_filled = pd.DataFrame(imputer.fit_transform(X), columns=X.columns, index=X.index)
-                new_df = pd.concat([X_filled, y])
+                new_df = pd.concat([X_filled, y], axis=1)
         case "median":
             new_df = df.fillna(df.median())
         case _:
@@ -205,7 +205,7 @@ def train_model(X_train:pd.DataFrame, y_train:pd.DataFrame, groups:list, model_s
             predefined_model = RandomForestClassifier(bootstrap=True, class_weight=None, criterion='gini', max_depth=None, 
                                         max_leaf_nodes=None, min_impurity_decrease=0.0, 
                                         min_samples_leaf=1, min_samples_split=2, 
-                                        min_weight_fraction_leaf=0.0, n_estimators=10, n_jobs=1, oob_score=False, 
+                                        min_weight_fraction_leaf=0.0, n_estimators=10, n_jobs=-1, oob_score=False, 
                                         random_state=42, verbose=0, warm_start=False)
             param_grid={
                 "n_estimators": [200, 400, 600, 800],
