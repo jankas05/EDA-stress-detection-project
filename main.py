@@ -1,6 +1,8 @@
 import segmentation as seg
 import model_evaluation as me
 import pandas as pd
+import matplotlib.pyplot as plt
+
 
 #for data vizualisation
 ##whole signal decomposition
@@ -17,8 +19,14 @@ import pandas as pd
 #me.plot_correlation(X.drop(columns=["subject"]),y,"results/correlation.svg")
 #me.create_profile(X)
 
+#df_results = pd.read_csv("results/zeroes_filling/model_evaluation/cvxEDA_results.csv")
+#df_results["model"] = pd.Categorical(df_results["model"], categories=["knn", "svm", "nb", "lr", "rf"], ordered=True)
+#fig, ax = plt.subplots(figsize=(8,6))
+#df_results.boxplot(by="model", column=["accuracy"],ax=ax, fontsize=14)
+#fig.savefig("results/zeroes_filling/cvxEDA_boxplot.svg", dpi=300, format="svg", bbox_inches="tight")
+
 #paper results
 #me.gather_results("cvxEDA", nan_handling="zeroes")
 
 #component seperation results
-#me.evaluate_component_separation()
+me.evaluate_component_separation()

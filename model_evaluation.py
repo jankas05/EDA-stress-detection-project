@@ -6,6 +6,8 @@ from yellowbrick.classifier import ConfusionMatrix
 import matplotlib.pyplot as plt
 import sklearn.model_selection as ms
 from math import ceil
+from sklearn.utils import resample
+from sklearn import set_config
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
@@ -14,6 +16,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (accuracy_score, recall_score, precision_score, f1_score)
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
+import xgboost as xgb
+import warnings
 
 def get_database(method:str):
     """
@@ -61,24 +65,35 @@ def pre_prepare_data(df:pd.DataFrame, nan_handling:str="zeroes"):
     :return new_X: New panda dataframe without NaN rows with features
     :return y: panda dataframe with the estimator feature
     """
+
     #basic preprocessing
-    y = df.stress
-    X = df.drop(columns = ["stress"])
     match nan_handling:
         case "none":
             new_df = df.dropna()
-            y = new_df.stress
-            new_X = new_df.drop(columns = ["stress"])
         case "zeroes": 
-            new_X = X.fillna(0)
+            new_df = df.fillna(0)
         case "iterative_imputing":
-            imputer = IterativeImputer(random_state=42)
-            new_X = pd.DataFrame(imputer.fit_transform(X), columns=X.columns, index=X.index)
+                y = df.stress
+                X = df.drop(columns = ["stress"])
+                imputer = IterativeImputer(random_state=42)
+                X_filled = pd.DataFrame(imputer.fit_transform(X), columns=X.columns, index=X.index)
+                new_df = pd.concat([X_filled, y])
         case "median":
-            new_X = X.fillna(df.median())
+            new_df = df.fillna(df.median())
         case _:
             raise ValueError("nan_handling has to be either 'drop', 'zeroes', 'iterative_imputing' or 'median'")
     
+    #bring the baseline to 50/50
+    mask = new_df.stress == 1
+    stress_df = new_df[mask]
+    no_stress_df = new_df[~mask]
+    df_downsample = resample(no_stress_df, replace=False, n_samples=len(stress_df), random_state=42)
+    df_balanced = pd.concat([stress_df, df_downsample])
+
+    #separate features and estimator feature
+    y = df_balanced.stress
+    new_X = df_balanced.drop(columns = ["stress"])
+
     return new_X, y
 
 def prepare_data(df:pd.DataFrame, random_state:int, nan_handling:str="zeroes"):
@@ -132,14 +147,14 @@ def train_model(X_train:pd.DataFrame, y_train:pd.DataFrame, groups:list, model_s
     :param y_train: Panda dataframe training set with estimator feature
     :param groups: Array for the cross-validation
     :param model_select: The machine learning algorithm upon which the data will be trained. Has to be 
-    either "knn", "svm", "nb", "lr" or "rf"
+    either "knn", "svm", "nb", "lr" or "rf" or "xgb"/
     :param random_state: int to add reproducability to the results
 
     :return best_model: The trained model
     """
     unique_subjects = len(groups.unique())
-    train_size = (unique_subjects - 1) / unique_subjects 
-    gss = ms.GroupShuffleSplit(n_splits=unique_subjects, train_size=train_size, random_state=random_state)
+    logo = ms.LeaveOneGroupOut()
+    set_config(enable_metadata_routing=True)
 
     match model_select:
         case "knn": #K Nearest Neighbors
@@ -176,14 +191,14 @@ def train_model(X_train:pd.DataFrame, y_train:pd.DataFrame, groups:list, model_s
         case "lr": #Logistic Regression
             #initilize the model and hyperparameter grid
             predefined_model = LogisticRegression(C=1.0, class_weight=None,dual=False, fit_intercept=True, 
-                                    intercept_scaling=1, max_iter=100,random_state=random_state, solver='liblinear',tol=0.0001, 
-                                    verbose=0, warm_start=False)
+                                    intercept_scaling=1, max_iter=300,random_state=random_state, solver='liblinear',
+                                    tol=0.0001, verbose=0, warm_start=False)
             param_grid={
                 "C": [0.01, 0.1, 1.0, 10.0, 100.0],
                 "class_weight": [None, "balanced"],
 
             }
-            model = LogisticRegression(random_state=random_state)
+            model = LogisticRegression(random_state=random_state, max_iter=300)
 
         case "rf": #RandomForest
             #initialize the model and the hyperparameter grid
@@ -199,28 +214,55 @@ def train_model(X_train:pd.DataFrame, y_train:pd.DataFrame, groups:list, model_s
                 "max_features": ["sqrt", "log2", 0.3, 0.5],
             }
             model = RandomForestClassifier(random_state=random_state)
-        
-        case _: #wrong model selected
-            raise ValueError("model_select has to be either 'knn', 'svm', 'nb', 'lr' or 'rf'")
-        
-    #calculate prefitting scores, perform a randomized search; change the n_iter parameter if needed
-    print("Training", model_select)
-    prefitting_scores = ms.cross_val_score(predefined_model, X_train, y_train, groups=groups, cv=gss)
-    print("Prefitting Scores:", prefitting_scores)
-    gs = ms.RandomizedSearchCV(estimator=model, 
-                                param_distributions=param_grid, n_iter=30, cv=gss, 
-                                scoring='accuracy', n_jobs=-1, random_state=random_state)
-    gs.fit(X_train, y_train, groups=groups)
 
-    #train the 'best' estimator and calculate postifitting scores
-    best_model = gs.best_estimator_
-    best_model.fit(X_train, y_train)
-    postfitting_scores = ms.cross_val_score(best_model, X_train, y_train, groups=groups, cv=gss)
-    print("Postfitting Scores:", postfitting_scores)
-    if min(postfitting_scores) < min(prefitting_scores):
-        return model.fit(X_train, y_train)
-    else:
-        return best_model
+        case "xgb": #XGBoost
+            #initialize the model and the hyperparameter grid
+            predefined_model = xgb.XGBClassifier(base_score=0.5, booster="gbtree", gamma=0, learning_rate=0.1,max_delta_step=0, 
+                                                 max_depth=3, min_child_weight=1, n_estimators=100, n_jobs=-1,objective="binary:logistic", 
+                                                   random_state=random_state, reg_alpha=0,reg_lambda=1, subsample=1)
+            param_grid={
+                "n_estimators": [100, 200, 400, 600],
+                "max_depth": [3, 5, 7, 10],
+                "learning_rate": [0.01, 0.1, 0.2, 0.3],
+                "subsample": [0.6, 0.8, 1.0],
+            }
+            model = xgb.XGBClassifier(random_state=random_state)
+
+        case _: #wrong model selected
+            raise ValueError("model_select has to be either 'knn', 'svm', 'nb', 'lr' or 'rf' or 'xgb'")
+        
+    #train and validate the model with cross-validation
+    print("----------Training", model_select, "model----------")
+    print("Evaluating baseline model:")
+    baseline_scores = ms.cross_val_score(predefined_model, X_train, y_train, params ={"groups":groups}, cv=logo, 
+                                         scoring='accuracy', n_jobs=-1)
+    print("Baseline scores:", baseline_scores, "Mean: ", baseline_scores.mean())
+
+    #tune the hyperparameters
+    print("Performing hyperparameter tuning:")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+        "ignore",
+        message="The total space of parameters .* is smaller than n_iter",
+        category=UserWarning
+    )
+        gs = ms.RandomizedSearchCV(estimator=model, 
+                                param_distributions=param_grid, n_iter=20, cv=logo, 
+                                scoring='accuracy', n_jobs=-1, random_state=random_state)
+        tuned_scores = ms.cross_val_score(gs, X_train, y_train, params ={"groups":groups}, cv=logo, scoring='accuracy',
+                                       n_jobs=-1)
+        print("Tuned scores:", tuned_scores, "Mean: ", tuned_scores.mean())
+
+        #check for overfitting and return the better model
+        if tuned_scores.mean() >= baseline_scores.mean():
+            print("Using tuned model.")
+            gs.fit(X_train, y_train, groups=groups)
+            final_model = gs.best_estimator_
+        else:
+            print("Using baseline model.")
+            final_model = predefined_model.fit(X_train, y_train)
+
+    return final_model
 
 def evaluate_model(model:str, X_test:pd.DataFrame, y_test:pd.DataFrame):
     """
@@ -280,6 +322,7 @@ def gather_evaluation_metrics(df:pd.DataFrame, random_state:int, repetitions:int
         evaluation_database.append(form_evaluation_entry(*kwargs,"nb", random_state+i))
         evaluation_database.append(form_evaluation_entry(*kwargs,"lr", random_state+i))
         evaluation_database.append(form_evaluation_entry(*kwargs,"rf", random_state+i))
+        evaluation_database.append(form_evaluation_entry(*kwargs,"xgb", random_state+i))
     return evaluation_database
 
 def save_evaluation_database(evaluation_database:list, name:str):
@@ -310,12 +353,13 @@ def gather_results(method:str, nan_handling:str="zeroes"):
 
     #get averages and save them
     df_results=pd.read_csv("results/"+ nan_handling + "_filling/" + "model_evaluation/" + method + "_results.csv")
+    df_results["model"] = pd.Categorical(df_results["model"], categories=["knn", "svm", "nb", "lr", "rf", "xgb"], ordered=True)
     df_mean = df_results.groupby("model", as_index=False)[["accuracy","recall","precision", "f1_score"]].mean()
     df_mean.to_csv("results/"+ nan_handling + "_filling/" + "model_evaluation/mean_" + method + "_results.csv", index=False)
 
     #plot a boxplot to show the results
-    fig, ax = plt.subplots(figsize=(12,6))
-    df_results.boxplot(by='model', column=["accuracy"],ax=ax)
+    fig, ax = plt.subplots(figsize=(8,6))
+    df_results.boxplot(by='model', column=["accuracy"],ax=ax, fontsize=14)
     fig.savefig("results/" + nan_handling + "_filling/"+ method + "_boxplot.svg", dpi=300, format="svg", bbox_inches="tight")
 
     return True
@@ -358,7 +402,7 @@ def plot_correlation(X,y,name):
     None
     """
 
-    fig,ax = plt.subplots(figsize = (12,12))
+    fig,ax = plt.subplots(figsize = (6,6))
     pcv = Rank2D(features=X.columns, algorithm ="pearson")
     pcv.fit(X,y)
     pcv.transform(X)
@@ -380,10 +424,11 @@ def plot_radviz(X, y, name):
     y = y.reset_index(drop=True)
 
     #plot the radviz
-    fig,ax = plt.subplots(figsize = (12,12))
+    fig,ax = plt.subplots(figsize = (6,6))
     rv = RadViz(classes=["no_stress","stress"], features=X.columns, ax=ax)
     rv.fit(X,y)
     rv.show()
+    #ax.tick_params(axis='both', labelsize=18)
     fig.savefig(name, dpi=300, format="svg",bbox_inches ="tight")
     return True
 
@@ -397,7 +442,7 @@ def plot_confusion_matrix(model, X_test, y_test, name):
     :param name:   path/name to save the plot
     """
     mapping = {0: "no stress", 1: "stress"}
-    fig,ax = plt.subplots(figsize=(12,12))
+    fig,ax = plt.subplots(figsize=(6,6))
     cm_viz = ConfusionMatrix(model, classes=["no stress", "stress"], encoder=mapping, force_model=True)
     cm_viz.score(X_test, y_test)
     cm_viz.show()

@@ -12,7 +12,8 @@ packages=[
     "pandas<2.0",
     "yellowbrick",
     "ydata-profiling",
-    "scikit-learn"
+    "scikit-learn",
+    "xgboost"
 ]
 def install(package):
     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
